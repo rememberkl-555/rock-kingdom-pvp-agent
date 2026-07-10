@@ -23,6 +23,7 @@ import { useLiveModelCatalog } from "@/hooks/use-live-model-catalog";
 import { useTheme } from "@/hooks/use-theme";
 import { countEnabledBuiltInFileTools } from "@/lib/config/built-in-tools";
 import { cn } from "@/lib/utils";
+import { useUpdate } from "@/providers/check-for-updates";
 import type { DatabaseMode, ModelRef } from "@/types/app-state";
 
 type DrawerKey = "current-model" | "db" | null;
@@ -47,6 +48,7 @@ export default function SettingsScreen() {
     providers,
   } = useConfig();
   const { data: liveModels } = useLiveModelCatalog();
+  const { release, installing, installUpdate } = useUpdate();
   const [databaseUrlInput, setDatabaseUrlInput] = useState("");
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [openDrawer, setOpenDrawer] = useState<DrawerKey>(null);
@@ -288,6 +290,14 @@ export default function SettingsScreen() {
       ) : null}
 
       <Card className="overflow-hidden">
+        <SettingsLinkRow
+          label="App Update"
+          value={release ? `Update ${release.tagName}` : "Up to date"}
+          showChevron={!!release}
+          disabled={installing}
+          onPress={release ? installUpdate : undefined}
+        />
+        <Separator />
         <SettingsLinkRow
           disabled={!ready || hydrating || busyKey === "refresh"}
           label="Refresh config"

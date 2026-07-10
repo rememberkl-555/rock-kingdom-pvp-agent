@@ -2,7 +2,7 @@ import Constants from "expo-constants";
 
 const RELEASES_API_URL =
   "https://api.github.com/repos/TecnicalBot/mobile-agent/releases";
-const RELEASE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const RELEASE_CACHE_TTL_MS = 60 * 60 * 1000;
 
 export type AvailableRelease = {
   apkName: string;
@@ -84,10 +84,10 @@ async function fetchGitHubReleaseUpdate() {
 
   const releases = (await response.json()) as GitHubRelease[];
   const published = releases.filter((release) => !release.draft);
+
   const selectedRelease =
-    published.find(
-      (item) => item.prerelease && findApkAsset(item) !== null,
-    ) ?? published.find((item) => findApkAsset(item) !== null);
+    published.find((item) => !item.prerelease && findApkAsset(item) !== null) ??
+    published.find((item) => item.prerelease && findApkAsset(item) !== null);
   const apk = selectedRelease ? findApkAsset(selectedRelease) : null;
   const tagName = selectedRelease?.tag_name?.trim() ?? "";
   const url = selectedRelease?.html_url?.trim() ?? "";
