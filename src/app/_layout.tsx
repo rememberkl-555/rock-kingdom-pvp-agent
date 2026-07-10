@@ -2,6 +2,11 @@ import { useAppState } from "@/hooks/use-app-state";
 import { useChat } from "@/hooks/use-chat";
 import { useTheme } from "@/hooks/use-theme";
 import { migrateAppDatabase } from "@/lib/db/database";
+import {
+  checkForGitHubReleaseUpdate,
+  installAvailableRelease,
+  type AvailableRelease,
+} from "@/lib/updates/github-release";
 import { AppStateProvider } from "@/providers/app-state-provider";
 import { AppQueryProvider } from "@/providers/query-provider";
 import * as Notifications from "expo-notifications";
@@ -15,8 +20,15 @@ import {
 import * as SplashScreen from "expo-splash-screen";
 import { SQLiteProvider } from "expo-sqlite";
 import { X } from "lucide-react-native";
-import { useEffect, useRef } from "react";
-import { Pressable, Text, useColorScheme, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  AppState,
+  Linking,
+  Pressable,
+  Text,
+  useColorScheme,
+  View,
+} from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import "./global.css";
 
@@ -140,6 +152,78 @@ function InAppNotificationBanner() {
   );
 }
 
+function ReleaseUpdateBanner() {
+  const theme = useTheme();
+  const dismissedTagRef = useRef<string | null>(null);
+  const [installing, setInstalling] = useState(false);
+  const [release, setRelease] = useState<AvailableRelease | null>(null);
+
+  useEffect(() => {
+    const check = () => {
+      checkForGitHubReleaseUpdate()
+        .then((nextRelease) => {
+          if (nextRelease?.tagName !== dismissedTagRef.current) {
+            setRelease(nextRelease);
+          }
+        })
+        .catch(console.warn);
+    };
+
+    check();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") check();
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  if (!release) return null;
+
+  return (
+    <View className="absolute inset-x-0 bottom-0 z-50 px-sp-4 pb-10">
+      <View className="rounded-card border border-border bg-card px-sp-4 py-sp-3 shadow-sm dark:border-border-dark dark:bg-card-dark">
+        <View className="flex-row items-start gap-sp-3">
+          <Pressable
+            accessibilityRole="button"
+            className="min-w-0 flex-1 gap-1"
+            disabled={installing}
+            onPress={() => {
+              setInstalling(true);
+              installAvailableRelease(release)
+                .catch((error) => {
+                  console.error(error);
+                  return Linking.openURL(release.url);
+                })
+                .finally(() => setInstalling(false));
+            }}
+          >
+            <Text className="font-sans text-sm font-semibold text-foreground dark:text-foreground-dark">
+              Update available: {release.tagName}
+            </Text>
+            <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
+              {installing
+                ? `Downloading ${release.apkName}…`
+                : `You have ${release.currentVersion}. Tap to update.`}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityLabel="Dismiss update"
+            accessibilityRole="button"
+            className="p-1"
+            hitSlop={8}
+            onPress={() => {
+              dismissedTagRef.current = release.tagName;
+              setRelease(null);
+            }}
+          >
+            <X color={theme.textSecondary} size={16} />
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function SplashScreenController() {
   const { error, hydrating, ready } = useAppState();
   const hasHiddenSplashRef = useRef(false);
@@ -170,6 +254,7 @@ export default function MainLayout() {
               <SplashScreenController />
               <NotificationObserver />
               <InAppNotificationBanner />
+              <ReleaseUpdateBanner />
               <Slot />
             </AppStateProvider>
           </SQLiteProvider>

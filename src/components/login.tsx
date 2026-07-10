@@ -51,20 +51,14 @@ export default function Login() {
           codeVerifier,
         });
 
-        console.log("TOKEN DATA:", tokenData);
-
         const accessToken = tokenData.access_token;
         const refreshToken = tokenData.refresh_token;
         const idToken = tokenData.id_token;
 
         await SecureStore.setItemAsync("openai_access_token", accessToken);
         await SecureStore.setItemAsync("openai_refresh_token", refreshToken);
-
-        console.log("ACCESS TOKEN:", accessToken);
-        console.log("REFRESH TOKEN:", refreshToken);
-        console.log("ID TOKEN:", idToken);
       } catch (error) {
-        console.log("Exchange error:", error);
+        // console.log("Exchange error:", error);
       }
 
       console.log("State matched. Now exchange token.");

@@ -1,8 +1,9 @@
-import {
-  ANTHROPIC_PROVIDER,
-} from "@/lib/providers/anthropic";
+import { ANTHROPIC_PROVIDER } from "@/lib/providers/anthropic";
 import { GOOGLE_PROVIDER } from "@/lib/providers/google";
-import { OPENAI_COMPATIBLE_PROVIDER } from "@/lib/providers/openai-compatible";
+import {
+  OPENAI_COMPATIBLE_PROFILE_PROVIDERS,
+  OPENAI_COMPATIBLE_PROVIDER,
+} from "@/lib/providers/openai-compatible";
 import {
   OPENAI_API_PROVIDER,
   OPENAI_OAUTH_PROVIDER,
@@ -14,7 +15,6 @@ import type {
   CuratedModelDefinition,
   ModelPreset,
   ProviderConfig,
-  ProviderFamily,
   ResolvedModel,
 } from "@/types/app-state";
 import { createModelRef } from "@/types/app-state";
@@ -26,6 +26,7 @@ const SUPPORTED_PROVIDERS = [
   GOOGLE_PROVIDER,
   OPENROUTER_PROVIDER,
   OPENAI_COMPATIBLE_PROVIDER,
+  ...OPENAI_COMPATIBLE_PROFILE_PROVIDERS,
 ] satisfies SupportedProviderDefinition[];
 
 const PROVIDER_BY_ID = new Map(
@@ -36,39 +37,13 @@ export const DEFAULT_PROVIDER_CONFIGS = SUPPORTED_PROVIDERS.map(
   (provider) => provider.config,
 );
 
-export const CURATED_MODEL_CATALOG: Record<
-  ProviderFamily,
-  CuratedModelDefinition[]
-> = {
-  openai: OPENAI_API_PROVIDER.models,
-  anthropic: ANTHROPIC_PROVIDER.models,
-  google: GOOGLE_PROVIDER.models,
-  openrouter: OPENROUTER_PROVIDER.models,
-  "openai-compatible": OPENAI_COMPATIBLE_PROVIDER.models,
-};
-
-export function getCatalogForFamily(family: ProviderFamily) {
-  return CURATED_MODEL_CATALOG[family];
-}
-
 export function getSupportedProviderDefinition(providerId: string) {
   return PROVIDER_BY_ID.get(providerId) ?? null;
 }
 
-export function getSuggestedModelsForProvider(
-  provider: Pick<ProviderConfig, "family" | "id">,
-): CuratedModelDefinition[] {
-  const supported = getSupportedProviderDefinition(provider.id);
-
-  if (supported) {
-    return supported.models;
-  }
-
-  return getCatalogForFamily(provider.family);
-}
-
 export function resolveConfiguredModel(input: {
   active: boolean;
+  definition?: CuratedModelDefinition;
   isDefault: boolean;
   modelId: string;
   options?: Record<string, unknown> | null;
@@ -78,18 +53,39 @@ export function resolveConfiguredModel(input: {
     "authType" | "family" | "id" | "label"
   >;
 }): ResolvedModel | null {
-  const suggestion = getSuggestedModelsForProvider(input.provider).find(
-    (item) => item.id === input.modelId,
-  );
+  const catalogSuggestion = input.definition;
+  const suggestion =
+    catalogSuggestion ??
+    (input.preset
+      ? {
+          id: input.modelId,
+          kind: "chat" as const,
+          label: input.preset.label?.trim() || input.modelId,
+        }
+      : null);
 
-  if (!suggestion) {
-    return null;
-  }
+  if (!suggestion) return null;
+
+  const storedProfile = input.preset?.options?.__mobileAgentModelProfile;
+  const storedProfileRecord =
+    storedProfile &&
+    typeof storedProfile === "object" &&
+    !Array.isArray(storedProfile)
+      ? (storedProfile as Record<string, unknown>)
+      : null;
+  const storedCapabilities =
+    storedProfileRecord?.capabilities &&
+    typeof storedProfileRecord.capabilities === "object" &&
+    !Array.isArray(storedProfileRecord.capabilities)
+      ? (storedProfileRecord.capabilities as Partial<
+          ResolvedModel["capabilities"]
+        >)
+      : undefined;
 
   const profile = resolveModelProfile({
     authType: input.provider.authType,
     family: input.provider.family,
-    hintCapabilities: suggestion.capabilities,
+    hintCapabilities: storedCapabilities ?? suggestion.capabilities,
     hintTransport: suggestion.transport,
     modelId: suggestion.id,
   });
@@ -102,8 +98,12 @@ export function resolveConfiguredModel(input: {
     providerLabel: input.provider.label,
     modelId: suggestion.id,
     label: input.preset?.label?.trim() || suggestion.label,
+    outputType:
+      (storedProfileRecord?.outputType === "image" ? "image" : undefined) ??
+      suggestion.outputType ??
+      (/\b(image|imagen)\b/i.test(suggestion.id) ? "image" : "text"),
     isDefault: input.isDefault,
-    source: "suggested",
+    source: catalogSuggestion ? "suggested" : "custom",
     active: input.active,
     capabilities: profile.capabilities,
     supportsTools: profile.capabilities.tools,

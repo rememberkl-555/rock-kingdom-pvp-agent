@@ -16,9 +16,17 @@ import {
   DEFAULT_BUILT_IN_TOOL_SETTINGS,
 } from "@/lib/config/built-in-tools";
 import {
-  getSuggestedModelsForProvider,
   resolveConfiguredModel,
 } from "@/lib/config/registry";
+import {
+  fetchLiveModelCatalogCached,
+  getCatalogModelDefinitionsForProvider,
+  type LiveCatalogModel,
+} from "@/lib/config/live-model-catalog";
+import {
+  fetchModelsDevCatalogCached,
+  getModelsDevDefinitionsForProvider,
+} from "@/lib/config/models-dev-catalog";
 import { createRepositories } from "@/lib/db/database";
 import { createExternalFolderService } from "@/lib/external-folder/external-folder-service";
 import { connectMcpOAuth } from "@/lib/mcp/oauth";
@@ -81,6 +89,7 @@ import type {
   AppStateSnapshot,
   BuiltInToolSettings,
   Conversation,
+  CuratedModelDefinition,
   ExecutionTimelineEvent,
   ExternalFolderSession,
   FileContextSource,
@@ -814,11 +823,69 @@ async function resolveConfig(input: {
   const activeProviderIds = input.providers
     .filter((provider) => providerCredentialMap.get(provider.id) === true)
     .map((provider) => provider.id);
+  let liveCatalog: LiveCatalogModel[] = [];
+  let modelsDevCatalog = {};
+  const needsModelsDevCatalog = input.providers.some(
+    (provider) =>
+      activeProviderIds.includes(provider.id) &&
+      provider.family === "openai-compatible" &&
+      provider.id !== "openai-compatible",
+  );
+
+  await Promise.all([
+    fetchLiveModelCatalogCached()
+      .then((catalog) => {
+        liveCatalog = catalog;
+      })
+      .catch((error) => {
+        console.warn("Failed to load the AI Gateway model catalog.", error);
+      }),
+    needsModelsDevCatalog
+      ? fetchModelsDevCatalogCached()
+          .then((catalog) => {
+            modelsDevCatalog = catalog;
+          })
+          .catch((error) => {
+            console.warn("Failed to load the models.dev catalog.", error);
+          })
+      : Promise.resolve(),
+  ]);
+
   const suggestedModelsByProvider = Object.fromEntries(
-    input.providers.map((provider) => [
-      provider.id,
-      getSuggestedModelsForProvider(provider),
-    ]),
+    input.providers.map((provider) => {
+      const builtInModels: CuratedModelDefinition[] = [];
+      const discoveredModels = [
+        ...getCatalogModelDefinitionsForProvider(liveCatalog, provider),
+        ...getModelsDevDefinitionsForProvider(modelsDevCatalog, provider),
+      ].filter(
+        (model, index, models) =>
+          models.findIndex((candidate) => candidate.id === model.id) === index,
+      );
+      const models = [
+        ...discoveredModels,
+        ...builtInModels.filter(
+          (model) =>
+            !discoveredModels.some((discovered) => discovered.id === model.id),
+        ),
+        ...input.modelPresets
+          .filter(
+            (preset) =>
+              preset.providerId === provider.id &&
+              !discoveredModels.some((model) => model.id === preset.modelId) &&
+              !builtInModels.some(
+                (model) => model.id === preset.modelId,
+              ),
+          )
+          .map((preset) => ({
+            id: preset.modelId,
+            kind: "chat" as const,
+            label: preset.label?.trim() || preset.modelId,
+            options: preset.options ?? undefined,
+          })),
+      ];
+
+      return [provider.id, models];
+    }),
   );
   const availableModels = input.providers.flatMap((provider) => {
     const suggestions = suggestedModelsByProvider[provider.id] ?? [];
@@ -833,6 +900,7 @@ async function resolveConfig(input: {
 
         return resolveConfiguredModel({
           active: activeProviderIds.includes(provider.id),
+          definition: suggestion,
           isDefault: preset?.isDefault ?? false,
           modelId: suggestion.id,
           options: preset?.options ?? suggestion.options ?? null,
@@ -1037,45 +1105,6 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
       const providers =
         await repositories.configRepository.listProviderConfigs();
       let modelPresets = await repositories.configRepository.listModelPresets();
-      const openAIProvider = providers.find(
-        (provider) => provider.id === "openai",
-      );
-
-      if (
-        openAIProvider &&
-        settings.activeModelRef === null &&
-        modelPresets.every((preset) => preset.providerId !== "openai") &&
-        (await secureSecretStore.hasProviderCredential(openAIProvider))
-      ) {
-        const defaultOpenAISuggestion =
-          getSuggestedModelsForProvider(openAIProvider)[0];
-
-        if (defaultOpenAISuggestion) {
-          await repositories.configRepository.createModelPreset({
-            providerId: "openai",
-            modelId: defaultOpenAISuggestion.id,
-            label: defaultOpenAISuggestion.label,
-            options: defaultOpenAISuggestion.options ?? null,
-            makeDefault: true,
-          });
-
-          settings = {
-            ...settings,
-            activeModelRef: createModelRef(
-              "openai",
-              defaultOpenAISuggestion.id,
-            ),
-          };
-
-          await repositories.configRepository.setSetting(
-            "active_model_ref",
-            settings.activeModelRef,
-          );
-
-          modelPresets = await repositories.configRepository.listModelPresets();
-        }
-      }
-
       let resolvedConfig = await resolveConfig({
         providers,
         modelPresets,

@@ -10,24 +10,4 @@ export const OPENROUTER_PROVIDER = {
     enabled: false,
     oauthAccountEmail: null,
   },
-  models: [
-    {
-      id: "openai/gpt-5.5",
-      kind: "chat",
-      label: "OpenRouter GPT-5.5",
-      capabilities: {
-        imageGeneration: false,
-        imageInput: false,
-      },
-    },
-    {
-      id: "openai/gpt-5-mini",
-      kind: "small",
-      label: "OpenRouter GPT-5 Mini",
-      capabilities: {
-        imageGeneration: false,
-        imageInput: false,
-      },
-    },
-  ],
 } satisfies SupportedProviderDefinition;

@@ -289,6 +289,7 @@ export type CuratedModelDefinition = {
   id: string;
   kind: ModelKind;
   label: string;
+  outputType?: "image" | "text";
   options?: Record<string, unknown>;
   transport?: ModelTransport;
 };
@@ -302,6 +303,7 @@ export type ResolvedModel = {
   providerLabel: string;
   modelId: string;
   label: string;
+  outputType: "image" | "text";
   isDefault: boolean;
   source: "suggested" | "custom";
   active: boolean;

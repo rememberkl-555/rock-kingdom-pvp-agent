@@ -36,6 +36,7 @@ type AuthorizationServerMetadata = {
 type ProtectedResourceMetadata = {
   authorization_servers?: string[];
   resource?: string;
+  scopes_supported?: string[];
 };
 
 let cryptoInstalled = false;
@@ -62,9 +63,7 @@ function createMcpOAuthCanceledError(message = "MCP OAuth was canceled.") {
 }
 
 export function isMcpOAuthCanceledError(error: unknown) {
-  return (
-    error instanceof Error && error.name === MCP_OAUTH_CANCELED_ERROR_NAME
-  );
+  return error instanceof Error && error.name === MCP_OAUTH_CANCELED_ERROR_NAME;
 }
 
 function getRequiredOAuthField(value: string | null, label: string) {
@@ -148,8 +147,8 @@ function buildStoredTokens(session: McpOAuthSession | null) {
 function isIssuerMismatchError(error: unknown) {
   return (
     error instanceof Error &&
-    error.message.includes("authorization server metadata issuer") &&
-    error.message.includes("does not match expected issuer")
+    /authorization server metadata issuer/i.test(error.message) &&
+    /does not match expected issuer/i.test(error.message)
   );
 }
 
@@ -247,7 +246,9 @@ function buildWellKnownPath(
     return `/.well-known/${type}`;
   }
 
-  const normalizedPath = pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  const normalizedPath = pathname.endsWith("/")
+    ? pathname.slice(0, -1)
+    : pathname;
   return `/.well-known/${type}${normalizedPath}`;
 }
 
@@ -270,7 +271,9 @@ function parseProtectedResourceMetadata(
   const authorizationServers = Array.isArray(
     (payload as { authorization_servers?: unknown }).authorization_servers,
   )
-    ? (payload as { authorization_servers: unknown[] }).authorization_servers.filter(
+    ? (
+        payload as { authorization_servers: unknown[] }
+      ).authorization_servers.filter(
         (value): value is string => typeof value === "string" && Boolean(value),
       )
     : undefined;
@@ -282,6 +285,14 @@ function parseProtectedResourceMetadata(
       (payload as { resource: string }).resource.trim()
         ? (payload as { resource: string }).resource
         : undefined,
+    scopes_supported: Array.isArray(
+      (payload as { scopes_supported?: unknown }).scopes_supported,
+    )
+      ? (payload as { scopes_supported: unknown[] }).scopes_supported.filter(
+          (value): value is string =>
+            typeof value === "string" && Boolean(value.trim()),
+        )
+      : undefined,
   };
 }
 
@@ -298,7 +309,9 @@ function parseAuthorizationServerMetadata(
     typeof record.authorization_endpoint !== "string" ||
     typeof record.token_endpoint !== "string"
   ) {
-    throw new Error("OAuth authorization server metadata is missing endpoints.");
+    throw new Error(
+      "OAuth authorization server metadata is missing endpoints.",
+    );
   }
 
   return {
@@ -323,7 +336,9 @@ async function discoverProtectedResourceMetadata(serverUrl: string) {
   const candidates = [primaryUrl];
 
   if (url.pathname !== "/") {
-    candidates.push(new URL("/.well-known/oauth-protected-resource", url.origin));
+    candidates.push(
+      new URL("/.well-known/oauth-protected-resource", url.origin),
+    );
   }
 
   for (const candidate of candidates) {
@@ -364,8 +379,12 @@ function buildAuthorizationMetadataUrls(authorizationServerUrl: string) {
     new URL(`/.well-known/oauth-authorization-server${pathname}`, url.origin),
   );
   urls.push(new URL("/.well-known/oauth-authorization-server", url.origin));
-  urls.push(new URL(`/.well-known/openid-configuration${pathname}`, url.origin));
-  urls.push(new URL(`${pathname}/.well-known/openid-configuration`, url.origin));
+  urls.push(
+    new URL(`/.well-known/openid-configuration${pathname}`, url.origin),
+  );
+  urls.push(
+    new URL(`${pathname}/.well-known/openid-configuration`, url.origin),
+  );
 
   return urls;
 }
@@ -389,7 +408,9 @@ async function discoverAuthorizationServerMetadataCompat(
     return parseAuthorizationServerMetadata(await response.json());
   }
 
-  throw new Error("OAuth authorization server metadata could not be discovered.");
+  throw new Error(
+    "OAuth authorization server metadata could not be discovered.",
+  );
 }
 
 async function registerDiscoveryClient(input: {
@@ -442,8 +463,16 @@ async function registerDiscoveryClient(input: {
 
 async function connectCompatibleDiscoveredMcpOAuth(server: McpServerConfig) {
   const provider = buildDiscoveryOAuthProvider(server, { interactive: true });
+
   const resourceMetadata = await discoverProtectedResourceMetadata(server.url);
   const resourceUrl = resolveProtectedResourceUrl(server.url, resourceMetadata);
+
+  const configuredScopes = splitScopes(server.oauthScopes);
+  const scopes =
+    configuredScopes.length > 0
+      ? configuredScopes
+      : (resourceMetadata?.scopes_supported ?? []);
+
   const authorizationServerUrl =
     resourceMetadata?.authorization_servers?.[0]?.trim() || server.url;
 
@@ -452,34 +481,77 @@ async function connectCompatibleDiscoveredMcpOAuth(server: McpServerConfig) {
     authorizationServerUrl,
   );
 
-  const metadata =
-    await discoverAuthorizationServerMetadataCompat(authorizationServerUrl);
+  let metadata: AuthorizationServerMetadata;
 
-  validateOAuthOrigin(server, metadata.authorization_endpoint);
+  try {
+    metadata = await discoverAuthorizationServerMetadataCompat(server.url);
+  } catch {
+    metadata = await discoverAuthorizationServerMetadataCompat(
+      authorizationServerUrl,
+    );
+  }
 
   let clientInformation = await provider.clientInformation();
 
   if (!clientInformation) {
-    clientInformation = await registerDiscoveryClient({ metadata, provider });
+    clientInformation = await registerDiscoveryClient({
+      metadata,
+      provider,
+    });
+
     await provider.saveClientInformation?.(clientInformation);
   }
 
   const redirectUri = getDiscoveryOAuthRedirectUri();
+
+  // ----------------------------
+  // Normalize Railway endpoint
+  // ----------------------------
+  const authEndpoint = new URL(metadata.authorization_endpoint);
+
+  let resource = authEndpoint.searchParams.get("resource") ?? resourceUrl;
+
+  authEndpoint.searchParams.delete("resource");
+
+  const discovery: DiscoveryDocument = {
+    authorizationEndpoint: authEndpoint.toString(),
+    tokenEndpoint: metadata.token_endpoint,
+  };
+
   const request = new AuthRequest({
     clientId: clientInformation.client_id,
     clientSecret: clientInformation.client_secret,
-    codeChallengeMethod: CodeChallengeMethod.S256,
-    extraParams: { resource: resourceUrl },
     redirectUri,
     responseType: ResponseType.Code,
-    scopes: splitScopes(server.oauthScopes),
+    scopes,
     usePKCE: true,
+    codeChallengeMethod: CodeChallengeMethod.S256,
+    extraParams: {
+      resource,
+    },
   });
-  const discovery: DiscoveryDocument = {
-    authorizationEndpoint: metadata.authorization_endpoint,
-    tokenEndpoint: metadata.token_endpoint,
-  };
+
+  await request.makeAuthUrlAsync(discovery);
+
+  console.log("Authorization Endpoint:", authEndpoint.toString());
+  console.log("Resource:", resource);
+  console.log("Generated URL:", request.url);
+
+  console.log({
+    verifier: request.codeVerifier,
+    challenge: request.codeChallenge,
+  });
+
   const result = await request.promptAsync(discovery);
+
+  if (result.type === "error") {
+    throw new Error(
+      result.error?.description ||
+        result.params.error_description ||
+        result.params.error ||
+        "MCP OAuth authorization failed.",
+    );
+  }
 
   if (result.type !== "success") {
     throw createMcpOAuthCanceledError();
@@ -496,18 +568,21 @@ async function connectCompatibleDiscoveredMcpOAuth(server: McpServerConfig) {
       clientId: clientInformation.client_id,
       clientSecret: clientInformation.client_secret,
       code,
+      redirectUri,
       extraParams: {
         ...(request.codeVerifier
           ? { code_verifier: request.codeVerifier }
           : {}),
-        resource: resourceUrl,
+        resource,
       },
-      redirectUri,
     },
-    { tokenEndpoint: metadata.token_endpoint },
+    {
+      tokenEndpoint: metadata.token_endpoint,
+    },
   );
 
   const currentSession = await secureSecretStore.getMcpOAuthSession(server.id);
+
   const authorizationServerInformation: OAuthAuthorizationServerInformation = {
     authorizationServerUrl: normalizeUrl(
       metadata.issuer?.trim() ? metadata.issuer : authorizationServerUrl,
@@ -524,11 +599,12 @@ async function connectCompatibleDiscoveredMcpOAuth(server: McpServerConfig) {
       ? Date.now() + tokenResponse.expiresIn * 1000
       : null,
     flowType: "compat",
-    resourceUrl,
+    resourceUrl: resource,
     state: null,
     tokens: {
       access_token: tokenResponse.accessToken,
-      authorization_server: authorizationServerInformation.authorizationServerUrl,
+      authorization_server:
+        authorizationServerInformation.authorizationServerUrl,
       expires_in: tokenResponse.expiresIn ?? undefined,
       refresh_token: tokenResponse.refreshToken ?? undefined,
       token_endpoint: authorizationServerInformation.tokenEndpoint,
@@ -536,8 +612,9 @@ async function connectCompatibleDiscoveredMcpOAuth(server: McpServerConfig) {
     },
   });
 }
-
-async function refreshCompatibleDiscoveredMcpAccessToken(server: McpServerConfig) {
+async function refreshCompatibleDiscoveredMcpAccessToken(
+  server: McpServerConfig,
+) {
   const session = await secureSecretStore.getMcpOAuthSession(server.id);
 
   if (!session?.tokens?.access_token) {
@@ -826,6 +903,12 @@ async function connectDiscoveredMcpOAuth(server: McpServerConfig) {
       error instanceof Error &&
       error.message.includes("dynamic client registration")
     ) {
+      if (new URL(server.url).hostname === "mcp.vercel.com") {
+        throw new Error(
+          "Vercel MCP only accepts clients reviewed and approved by Vercel. Mobile Agent cannot complete OAuth until Vercel approves its client.",
+        );
+      }
+
       throw new Error(
         "This MCP server requires a client ID. Open Advanced OAuth overrides and add it there.",
       );
@@ -988,6 +1071,16 @@ export async function connectMcpOAuth(server: McpServerConfig) {
     if (!isMcpOAuthCanceledError(error)) {
       console.error(error);
       if (error instanceof Error) console.error(error.stack);
+    }
+
+    if (
+      new URL(server.url).hostname === "mcp.vercel.com" &&
+      error instanceof Error &&
+      /client|registration|approved|unauthorized/i.test(error.message)
+    ) {
+      throw new Error(
+        "Vercel MCP only accepts clients reviewed and approved by Vercel. Mobile Agent cannot complete OAuth until Vercel approves its client.",
+      );
     }
 
     throw error;

@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useConfig } from "@/hooks/use-config";
 import { useTheme } from "@/hooks/use-theme";
-import { getSuggestedModelsForProvider } from "@/lib/config/registry";
+import { invalidateLiveModelCatalog } from "@/lib/config/live-model-catalog";
 import { cn } from "@/lib/utils";
 import {
   createModelRef,
@@ -49,13 +49,16 @@ export default function SettingsProvidersScreen() {
     disconnectOpenAIOAuth,
     modelPresets,
     providers,
+    refresh,
     saveProviderApiKey,
     selectModel,
+    suggestedModelsByProvider,
     updateProvider,
   } = useConfig();
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [baseUrlInput, setBaseUrlInput] = useState("");
+  const [customModelId, setCustomModelId] = useState("");
   const [modelQuery, setModelQuery] = useState("");
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
@@ -63,21 +66,20 @@ export default function SettingsProvidersScreen() {
     return [...providers]
       .sort((left, right) => left.label.localeCompare(right.label))
       .map((provider) => {
-        const presetCount = modelPresets.filter(
-          (preset) => preset.providerId === provider.id,
-        ).length;
         const isCurrent = currentModel?.providerId === provider.id;
         const isActive = activeProviderIds.includes(provider.id);
+        const models =
+          suggestedModelsByProvider[provider.id] ?? [];
 
         return {
           key: `provider:${provider.id}`,
           label: provider.label,
-          models: getSuggestedModelsForProvider(provider),
+          models,
           provider,
           value: isCurrent
             ? "Current"
             : isActive
-              ? `${presetCount} model${presetCount === 1 ? "" : "s"}`
+              ? `${models.length} available`
               : provider.authType === "oauth"
                 ? "Connect"
                 : "Set up",
@@ -88,6 +90,7 @@ export default function SettingsProvidersScreen() {
     currentModel,
     modelPresets,
     providers,
+    suggestedModelsByProvider,
   ]);
 
   const selectedItem =
@@ -155,6 +158,19 @@ export default function SettingsProvidersScreen() {
     selectedProviderId,
     selectedProviderPresets,
   ]);
+  const modelSections = useMemo(
+    () => [
+      {
+        label: "Text models",
+        models: displayModels.filter((model) => model.outputType !== "image"),
+      },
+      {
+        label: "Image models",
+        models: displayModels.filter((model) => model.outputType === "image"),
+      },
+    ],
+    [displayModels],
+  );
 
   const runAction = async (key: string, action: () => Promise<void>) => {
     setBusyKey(key);
@@ -198,6 +214,7 @@ export default function SettingsProvidersScreen() {
               onPress={() => {
                 setApiKeyInput("");
                 setBaseUrlInput(provider.provider.baseUrl ?? "");
+                setCustomModelId("");
                 setModelQuery("");
                 setSelectedItemKey(provider.key);
               }}
@@ -213,6 +230,7 @@ export default function SettingsProvidersScreen() {
             setSelectedItemKey(null);
             setApiKeyInput("");
             setBaseUrlInput("");
+            setCustomModelId("");
             setModelQuery("");
           }
         }}
@@ -346,6 +364,33 @@ export default function SettingsProvidersScreen() {
                 )}
 
                 <View className="gap-sp-3">
+                  <View className="flex-row items-center justify-between gap-sp-3">
+                    <Text className="flex-1 font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
+                      {selectedProvider.authType === "oauth"
+                        ? "Models supported by ChatGPT OAuth"
+                        : "Models from live provider catalogs"}
+                    </Text>
+                    {selectedProvider.authType === "apiKey" ? (
+                      <Button
+                        loading={
+                          busyKey === `refresh-models:${selectedProvider.id}`
+                        }
+                        onPress={() => {
+                          runAction(
+                            `refresh-models:${selectedProvider.id}`,
+                            async () => {
+                              invalidateLiveModelCatalog();
+                              await refresh();
+                            },
+                          ).catch(console.error);
+                        }}
+                        size="xs"
+                        variant="outline"
+                      >
+                        Refresh
+                      </Button>
+                    ) : null}
+                  </View>
                   <Input
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -354,70 +399,135 @@ export default function SettingsProvidersScreen() {
                     value={modelQuery}
                   />
 
+                  <View className="flex-row gap-sp-2">
+                    <Input
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      className="flex-1"
+                      onChangeText={setCustomModelId}
+                      placeholder="Model ID not in catalog"
+                      value={customModelId}
+                    />
+                    <Button
+                      disabled={!customModelId.trim()}
+                      loading={
+                        busyKey ===
+                        `custom-model:${selectedProvider.id}:${customModelId.trim()}`
+                      }
+                      onPress={() => {
+                        const modelId = customModelId.trim();
+                        runAction(
+                          `custom-model:${selectedProvider.id}:${modelId}`,
+                          async () => {
+                            await createModelPreset({
+                              label: modelId,
+                              makeDefault: selectedProviderPresets.length === 0,
+                              modelId,
+                              providerId: selectedProvider.id,
+                              select: selectedProviderActive,
+                            });
+                            setCustomModelId("");
+                          },
+                        ).catch(console.error);
+                      }}
+                      size="sm"
+                      variant="outline"
+                    >
+                      Add
+                    </Button>
+                  </View>
+
                   {displayModels.length > 0 ? (
-                    <View className="overflow-hidden rounded-card border border-border dark:border-border-dark">
-                      {displayModels.map((model, index) => {
-                        const modelRef = createModelRef(
-                          selectedProvider.id,
-                          model.id,
-                        ) as ModelRef;
-                        const resolvedModel =
-                          selectedProviderModels.find(
-                            (item) => item.ref === modelRef,
-                          ) ?? null;
-                        const existingPreset =
-                          selectedProviderPresets.find(
-                            (item) => item.modelId === model.id,
-                          ) ?? null;
-                        const current = currentModel?.ref === modelRef;
+                    modelSections.map((section) =>
+                      section.models.length > 0 ? (
+                        <View className="gap-sp-2" key={section.label}>
+                          <Text className="font-sans text-sm font-semibold text-foreground dark:text-foreground-dark">
+                            {section.label}
+                          </Text>
+                          <View className="overflow-hidden rounded-card border border-border dark:border-border-dark">
+                            {section.models.map((model, index) => {
+                              const modelRef = createModelRef(
+                                selectedProvider.id,
+                                model.id,
+                              ) as ModelRef;
+                              const resolvedModel =
+                                selectedProviderModels.find(
+                                  (item) => item.ref === modelRef,
+                                ) ?? null;
+                              const existingPreset =
+                                selectedProviderPresets.find(
+                                  (item) => item.modelId === model.id,
+                                ) ?? null;
+                              const current = currentModel?.ref === modelRef;
 
-                        return (
-                          <View key={model.id}>
-                            {index > 0 ? <Separator /> : null}
-                            <ProviderModelRow
-                              capabilityBadges={buildCapabilityBadges(resolvedModel)}
-                              checkColor={theme.text}
-                              current={current}
-                              label={model.label}
-                              modelId={model.id}
-                              onPress={() => {
-                                runAction(
-                                  `model:${selectedProvider.id}:${model.id}`,
-                                  async () => {
-                                    if (existingPreset) {
-                                      if (!current && selectedProviderActive) {
-                                        await selectModel(modelRef);
-                                      }
+                              return (
+                                <View key={model.id}>
+                                  {index > 0 ? <Separator /> : null}
+                                  <ProviderModelRow
+                                    capabilityBadges={buildCapabilityBadges(
+                                      resolvedModel ?? model,
+                                    )}
+                                    checkColor={theme.text}
+                                    current={current}
+                                    label={model.label}
+                                    modelId={model.id}
+                                    onPress={() => {
+                                      runAction(
+                                        `model:${selectedProvider.id}:${model.id}`,
+                                        async () => {
+                                          if (existingPreset) {
+                                            if (
+                                              !current &&
+                                              selectedProviderActive
+                                            ) {
+                                              await selectModel(modelRef);
+                                            }
 
-                                      return;
+                                            return;
+                                          }
+
+                                          await createModelPreset({
+                                            label: model.label,
+                                            makeDefault:
+                                              selectedProviderPresets.length ===
+                                              0,
+                                            modelId: model.id,
+                                            options: {
+                                              ...(model.options ?? {}),
+                                              __mobileAgentModelProfile: {
+                                                capabilities:
+                                                  model.capabilities ?? {},
+                                                outputType:
+                                                  model.outputType ?? "text",
+                                                transport:
+                                                  model.transport ?? null,
+                                              },
+                                            },
+                                            providerId: selectedProvider.id,
+                                            select: selectedProviderActive,
+                                          });
+                                        },
+                                      ).catch(console.error);
+                                    }}
+                                    stateLabel={
+                                      current
+                                        ? "Current"
+                                        : existingPreset
+                                          ? selectedProviderActive
+                                            ? "Use"
+                                            : "Added"
+                                          : selectedProviderActive
+                                            ? "Add"
+                                            : "Save"
                                     }
-
-                                    await createModelPreset({
-                                      label: model.label,
-                                      makeDefault: selectedProviderPresets.length === 0,
-                                      modelId: model.id,
-                                      providerId: selectedProvider.id,
-                                      select: selectedProviderActive,
-                                    });
-                                  },
-                                ).catch(console.error);
-                              }}
-                              stateLabel={
-                                current
-                                  ? "Current"
-                                  : existingPreset
-                                    ? selectedProviderActive
-                                      ? "Use"
-                                      : "Added"
-                                    : selectedProviderActive
-                                      ? "Add"
-                                      : "Save"
-                              }
-                            />
+                                  />
+                                </View>
+                              );
+                            })}
                           </View>
-                        );
-                      })}
-                    </View>
+                        </View>
+                      ) : null,
+                    )
                   ) : (
                     <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
                       No models found
@@ -427,7 +537,8 @@ export default function SettingsProvidersScreen() {
               </DrawerBody>
               <DrawerFooter>
                 <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
-                  Models shown here are the supported local profiles for this app.
+                  Models come from live catalogs. Saved custom model IDs remain
+                  available if a catalog is temporarily offline.
                 </Text>
               </DrawerFooter>
             </>
@@ -488,23 +599,36 @@ function StatusRow({
   );
 }
 
-function buildCapabilityBadges(model: ResolvedModel | null) {
+function buildCapabilityBadges(
+  model: CuratedModelDefinition | ResolvedModel | null,
+) {
   if (!model) {
     return [];
   }
 
   const badges: string[] = [];
 
-  if (model.supportsTools) {
+  const capabilities = model.capabilities ?? {};
+
+  if (
+    ("supportsTools" in model && model.supportsTools) ||
+    capabilities.tools
+  ) {
     badges.push("Tools");
   }
 
-  if (model.supportsImageInput) {
-    badges.push("Vision");
+  if (
+    ("supportsImageInput" in model && model.supportsImageInput) ||
+    capabilities.imageInput
+  ) {
+    badges.push("Image input");
   }
 
-  if (model.supportsImageGeneration) {
-    badges.push("Images");
+  if (
+    ("supportsImageGeneration" in model && model.supportsImageGeneration) ||
+    capabilities.imageGeneration
+  ) {
+    badges.push("Image output");
   }
 
   return badges;

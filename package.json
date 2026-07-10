@@ -2,7 +2,7 @@
   "name": "Mobile Agent",
   "description": "An AI agent that runs on your phone.",
   "main": "expo-router/entry",
-  "version": "0.1.0-beta.1",
+  "version": "1.0.0",
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.7",
     "@ai-sdk/google": "^4.0.6",
@@ -28,6 +28,7 @@
     "expo-font": "~57.0.0",
     "expo-glass-effect": "~57.0.0",
     "expo-image": "~57.0.0",
+    "expo-intent-launcher": "~57.0.0",
     "expo-linking": "~57.0.1",
     "expo-media-library": "^57.0.1",
     "expo-notifications": "~57.0.3",

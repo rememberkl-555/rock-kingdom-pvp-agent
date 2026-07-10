@@ -12,6 +12,9 @@
       "bundleIdentifier": "com.tecnicalbot.mobileagent"
     },
     "android": {
+      "permissions": [
+        "android.permission.REQUEST_INSTALL_PACKAGES"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/icon.png",
@@ -31,9 +34,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0b1545",
+          "backgroundColor": "#5996FF",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 240
+          "imageWidth": 220
         }
       ],
       "expo-sqlite",

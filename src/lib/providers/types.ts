@@ -1,7 +1,4 @@
-import type {
-  CuratedModelDefinition,
-  ProviderConfig,
-} from "@/types/app-state";
+import type { ProviderConfig } from "@/types/app-state";
 
 export type ProviderDefaults = Omit<
   ProviderConfig,
@@ -10,5 +7,4 @@ export type ProviderDefaults = Omit<
 
 export type SupportedProviderDefinition = {
   config: ProviderDefaults;
-  models: CuratedModelDefinition[];
 };

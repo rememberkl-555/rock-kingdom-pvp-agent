@@ -1,10 +1,14 @@
 import type {
+  CuratedModelDefinition,
   ProviderAuthType,
   ProviderConfig,
   ProviderFamily,
 } from "@/types/app-state";
+import { isCodexPermittedModel } from "@/lib/providers/profile";
 
 const LIVE_MODEL_CATALOG_URL = "https://ai-gateway.vercel.sh/v1/models";
+const LIVE_MODEL_CATALOG_TTL_MS = 5 * 60 * 1000;
+let cachedCatalog: { expiresAt: number; models: LiveCatalogModel[] } | null = null;
 
 type LiveModelCatalogResponse = {
   data?: Array<{
@@ -182,6 +186,63 @@ export async function fetchLiveModelCatalog(
         : [],
       type: item.type ?? "unknown",
     }));
+}
+
+export async function fetchLiveModelCatalogCached() {
+  if (cachedCatalog && cachedCatalog.expiresAt > Date.now()) {
+    return cachedCatalog.models;
+  }
+
+  const models = await fetchLiveModelCatalog();
+  cachedCatalog = {
+    expiresAt: Date.now() + LIVE_MODEL_CATALOG_TTL_MS,
+    models,
+  };
+  return models;
+}
+
+export function invalidateLiveModelCatalog() {
+  cachedCatalog = null;
+}
+
+function getProviderModelId(model: LiveCatalogModel, provider: ProviderConfig) {
+  if (provider.id === "openrouter") return model.id;
+  const prefix = `${model.ownedBy}/`;
+  return model.id.startsWith(prefix) ? model.id.slice(prefix.length) : model.id;
+}
+
+export function getCatalogModelDefinitionsForProvider(
+  models: LiveCatalogModel[],
+  provider: ProviderConfig,
+): CuratedModelDefinition[] {
+  if (provider.id === "openai-compatible") {
+    return [];
+  }
+
+  return getLiveModelsForProvider(models, provider).flatMap((model) => {
+    const imageGeneration = model.tags.includes("image-generation");
+    const id = getProviderModelId(model, provider);
+
+    if (provider.authType === "oauth" && !isCodexPermittedModel(id)) {
+      return [];
+    }
+
+    return [
+      {
+        capabilities: {
+          imageGeneration,
+          imageInput: model.tags.includes("vision"),
+          tools: model.tags.includes("tool-use"),
+        },
+        id,
+        kind: /(?:mini|nano|haiku|flash-lite|small)/i.test(id)
+          ? "small"
+          : "chat",
+        label: model.name,
+        outputType: imageGeneration ? "image" : "text",
+      },
+    ];
+  });
 }
 
 export function getLiveModelsForProvider(
