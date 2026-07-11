@@ -5,6 +5,26 @@ import { z } from "zod";
 import type { MemoryRepository } from "@/lib/db/repositories/types";
 import type { MemoryEntry, MemoryEvent } from "@/types/app-state";
 
+const memoryCategorySchema = z.enum([
+  "preference",
+  "personal_fact",
+  "goal",
+  "constraint",
+]);
+
+type MemoryCategory = z.infer<typeof memoryCategorySchema>;
+
+const MEMORY_CATEGORY_LABELS: Record<MemoryCategory, string> = {
+  preference: "Preference",
+  personal_fact: "Personal fact",
+  goal: "Goal",
+  constraint: "Constraint",
+};
+
+function formatMemory(category: MemoryCategory, key: string, value: string) {
+  return `${MEMORY_CATEGORY_LABELS[category]}: ${key.trim()} = ${value.trim()}`;
+}
+
 export function buildMemorySystemPrompt(
   memories: MemoryEntry[],
   input: { canWrite: boolean },
@@ -17,7 +37,10 @@ export function buildMemorySystemPrompt(
     return input.canWrite
       ? [
           "Memory is enabled.",
-          "Use memory tools only for stable user preferences or facts that will help in future chats.",
+          "Save only durable information that will predictably help in future chats: explicit preferences, stable personal facts, ongoing goals, or persistent constraints.",
+          "Good trigger phrases include: remember this, always, from now on, I prefer, my preferred, or a clearly stated lasting fact.",
+          "Example: 'Always respond in Hinglish' should be saved as category=preference, key=language, value=Hinglish.",
+          "Never save the conversation, assistant responses, tool results, temporary tasks, one-off requests, guesses, or information inferred only from context.",
           "Do not save one-off requests, secrets, credentials, payment data, or sensitive health, legal, or financial facts unless the user explicitly asks you to remember them.",
         ].join("\n")
       : "Memory is enabled, but no memories have been saved yet.";
@@ -37,8 +60,11 @@ export function buildMemorySystemPrompt(
   return [
     ...lines,
     "",
-    "Use memory tools only for stable user preferences or facts that will help in future chats.",
+    "Save only durable information that will predictably help in future chats: explicit preferences, stable personal facts, ongoing goals, or persistent constraints.",
+    "Example: 'Always respond in Hinglish' should be saved as category=preference, key=language, value=Hinglish.",
+    "Never save the conversation, assistant responses, tool results, temporary tasks, one-off requests, guesses, or information inferred only from context.",
     "Do not save one-off requests, secrets, credentials, payment data, or sensitive health, legal, or financial facts unless the user explicitly asks you to remember them.",
+    "If a new durable fact replaces an existing memory, update that memory instead of creating a duplicate.",
     "When updating or removing an existing memory, use the memory id shown above.",
   ].join("\n");
 }
@@ -60,14 +86,31 @@ export function createMemoryTools(input: {
   const tools = {
     rememberMemory: tool({
       description:
-        "Save a stable user preference or fact for future chats. Do not save secrets, credentials, payment data, or sensitive health/legal/financial facts unless the user explicitly asks you to remember them.",
+        "Save one explicit, durable user preference, personal fact, ongoing goal, or persistent constraint for future chats. Never store chat transcripts, assistant output, temporary tasks, tool results, or inferred information.",
       inputSchema: z.object({
-        content: z.string().min(1),
+        category: memoryCategorySchema,
+        key: z.string().trim().min(1).max(80),
+        value: z.string().trim().min(1).max(300),
         reason: z.string().optional(),
       }),
-      execute: async ({ content, reason }) => {
+      execute: async ({ category, key, reason, value }) => {
+        const content = formatMemory(category, key, value);
+        const existing = (await input.memoryRepository.list()).find(
+          (memory) =>
+            memory.enabled &&
+            !memory.archivedAt &&
+            memory.content.toLowerCase() === content.toLowerCase(),
+        );
+
+        if (existing) {
+          return {
+            memoryId: existing.id,
+            status: "already_saved",
+          };
+        }
+
         const memory = await input.memoryRepository.create({
-          content: content.trim(),
+          content,
           sourceConversationId: input.conversationId,
           sourceMessageId: input.sourceMessageId,
         });
@@ -89,13 +132,15 @@ export function createMemoryTools(input: {
     }),
     updateMemory: tool({
       description:
-        "Update an existing memory by id when the new information replaces or clarifies the old memory.",
+        "Update an existing structured memory by id when the user replaces or clarifies durable information.",
       inputSchema: z.object({
         memoryId: z.string().min(1),
-        content: z.string().min(1),
+        category: memoryCategorySchema,
+        key: z.string().trim().min(1).max(80),
+        value: z.string().trim().min(1).max(300),
         reason: z.string().optional(),
       }),
-      execute: async ({ content, memoryId, reason }) => {
+      execute: async ({ category, key, memoryId, reason, value }) => {
         const current = await input.memoryRepository.getById(memoryId);
 
         if (!current || current.archivedAt) {
@@ -105,7 +150,7 @@ export function createMemoryTools(input: {
           };
         }
 
-        const nextContent = content.trim();
+        const nextContent = formatMemory(category, key, value);
 
         await input.memoryRepository.update(memoryId, {
           content: nextContent,

@@ -341,6 +341,18 @@ const BASE_AGENT_SYSTEM_PROMPT = [
   "Keep user-facing responses clear and concise unless the task calls for more detail.",
 ].join("\n\n");
 
+function buildCurrentDateTimeSystemPrompt() {
+  const now = new Date();
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  return [
+    `Current local date and time: ${now.toLocaleString()}.`,
+    `Current time zone: ${timeZone || "device local time"}.`,
+    `Current ISO timestamp: ${now.toISOString()}.`,
+    "Use this as the reference for relative dates such as today, tomorrow, and yesterday.",
+  ].join("\n");
+}
+
 function buildConversationTitle(input: string) {
   const normalized = input.replace(/\s+/g, " ").trim();
 
@@ -351,6 +363,19 @@ function buildConversationTitle(input: string) {
   return normalized.length > 48
     ? `${normalized.slice(0, 48).trim()}...`
     : normalized;
+}
+
+function normalizeGeneratedConversationTitle(text: string, fallback: string) {
+  const title = text
+    .split("\n")
+    .map((line) => line.trim())
+    .find(Boolean)
+    ?.replace(/^[#*\-\s"'`]+|[#*\-\s"'`]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!title) return fallback;
+  return title.length > 60 ? `${title.slice(0, 57).trim()}...` : title;
 }
 
 function sortConversations(conversations: Conversation[]) {
@@ -1118,6 +1143,72 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
     }));
 
     return nextRun;
+  }
+
+  async function generateAndApplyConversationTitle(input: {
+    conversation: Conversation;
+    firstUserMessage: string;
+    model: ResolvedModel;
+    provider: ProviderConfig;
+    runId: string;
+  }) {
+    const fallback = buildConversationTitle(input.firstUserMessage);
+    let title = fallback;
+
+    try {
+      const result = await modelRuntime.generateTextStream({
+        maxToolSteps: 1,
+        messages: [
+          {
+            role: "user",
+            content: input.firstUserMessage,
+          },
+        ],
+        model: input.model,
+        provider: input.provider,
+        secretStore: secureSecretStore,
+        sessionId: `${input.runId}:title`,
+        system: [
+          "You generate concise titles for chat conversations.",
+          "Return only one plain-text title with 3 to 7 words.",
+          "Describe the user's main intent. Do not use quotes, markdown, or ending punctuation.",
+        ].join("\n"),
+      });
+
+      title = normalizeGeneratedConversationTitle(result.text, fallback);
+    } catch {}
+
+    const latest = await repositoriesRef.current.conversationRepository.getById(
+      input.conversation.id,
+    );
+
+    if (!latest || latest.title !== "New chat") return;
+
+    const updatedConversation = {
+      ...latest,
+      title,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await repositoriesRef.current.conversationRepository.updateMetadata(
+      latest.id,
+      {
+        title,
+        updatedAt: updatedConversation.updatedAt,
+      },
+    );
+
+    setSnapshot((current) => ({
+      ...current,
+      conversations: upsertConversation(
+        current.conversations,
+        updatedConversation,
+      ),
+      currentConversation:
+        current.currentConversation?.id === updatedConversation.id
+          ? updatedConversation
+          : current.currentConversation,
+    }));
   }
 
   async function hydrate() {
@@ -2700,6 +2791,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
       const runtimeSystem =
         [
           BASE_AGENT_SYSTEM_PROMPT,
+          buildCurrentDateTimeSystemPrompt(),
           builtInRuntimeSystem,
           mcpRuntime?.systemPrompt,
           memoryRuntimeSystem,
@@ -2908,6 +3000,16 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
           workspaceFiles,
         };
       });
+
+      if (conversation.title === "New chat") {
+        void generateAndApplyConversationTitle({
+          conversation,
+          firstUserMessage: run.input,
+          model: resolvedModel,
+          provider,
+          runId: run.id,
+        });
+      }
 
       await notifyRunStateChange({
         body: "Agent finished this task.",
@@ -3234,10 +3336,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
     );
     const assistantSequence = userSequence + 1;
     const timestamp = new Date().toISOString();
-    const nextTitle =
-      conversation.title === "New chat"
-        ? buildConversationTitle(cleanContent)
-        : conversation.title;
+    const nextTitle = conversation.title;
 
     const updatedConversation: Conversation = {
       ...conversation,

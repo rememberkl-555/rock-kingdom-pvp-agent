@@ -97,6 +97,13 @@ function matchesMenuQuery(
   return haystack.includes(query);
 }
 
+const STARTER_PROMPTS = [
+  "Design a landing page",
+  "Draft a professional email",
+  "Brainstorm ideas for a side project",
+  "Remember that I prefer concise answers",
+];
+
 function logComposerDebug(label: string, data: Record<string, unknown>) {
   if (!__DEV__) {
     return;
@@ -189,13 +196,30 @@ export default function Screen() {
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={
                 ready && !hydrating ? (
-                  <View className="px-sp-2 py-sp-8">
-                    <Text className="font-sans text-base text-muted-foreground dark:text-muted-foreground-dark">
-                      {currentModel
-                        ? "Start the conversation with a prompt."
-                        : "Connect a model to start chatting."}
-                    </Text>
-                  </View>
+                  currentModel ? (
+                    <View className="pb-sp-4">
+                      {STARTER_PROMPTS.map((prompt) => (
+                        <Button
+                          key={prompt}
+                          variant="ghost"
+                          className="justify-start"
+                          onPress={() =>
+                            sendMessage({ content: prompt }).catch(
+                              console.error,
+                            )
+                          }
+                        >
+                          {prompt}
+                        </Button>
+                      ))}
+                    </View>
+                  ) : (
+                    <View className="px-sp-2 py-sp-8">
+                      <Text className="font-sans text-base text-muted-foreground dark:text-muted-foreground-dark">
+                        Connect a model to start chatting.
+                      </Text>
+                    </View>
+                  )
                 ) : null
               }
               ListFooterComponent={<View className="h-sp-1" />}
