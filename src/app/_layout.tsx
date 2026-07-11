@@ -148,7 +148,7 @@ function ReleaseUpdateBanner() {
   if (!release) return null;
 
   return (
-    <View className="absolute inset-x-0 bottom-0 z-50 px-sp-4 pb-10">
+    <View className="absolute inset-x-0 top-10 z-50 px-sp-4 pb-10">
       <View className="rounded-card border border-border bg-card px-sp-4 py-sp-3 shadow-sm dark:border-border-dark dark:bg-card-dark">
         <View className="flex-row items-start gap-sp-3">
           <Pressable
