@@ -8,6 +8,7 @@ import type {
   RefObject,
 } from "react";
 import {
+  Fragment,
   createContext,
   forwardRef,
   useContext,
@@ -177,6 +178,7 @@ export function MessageScrollerProvider({
   }
 
   function scrollToEnd() {
+    followRef.current = true;
     listRef.current?.scrollToEnd({ animated: true });
   }
 
@@ -328,6 +330,7 @@ function MessageScrollerListInner<ItemT>(
           ref.current = node;
         }
       }}
+      accessibilityLiveRegion="polite"
       className={cn("flex-1", className)}
       contentContainerClassName={cn("gap-sp-3", contentContainerClassName)}
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
@@ -346,17 +349,14 @@ function MessageScrollerListInner<ItemT>(
       scrollEventThrottle={scrollEventThrottle}
       {...props}
     >
-      <View
-        accessibilityLiveRegion="polite"
-        className={cn("gap-sp-3", contentContainerClassName)}
-      >
+      <View className={cn("gap-sp-3", contentContainerClassName)}>
         {ListHeaderComponent}
         {data.length === 0
           ? ListEmptyComponent
           : data.map((item, index) => (
-              <View key={keyExtractor?.(item, index) ?? String(index)}>
+              <Fragment key={keyExtractor?.(item, index) ?? String(index)}>
                 {renderItem({ index, item })}
-              </View>
+              </Fragment>
             ))}
         {ListFooterComponent}
       </View>

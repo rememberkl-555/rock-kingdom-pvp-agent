@@ -50,6 +50,8 @@ export const ChatMessage = memo(function ChatMessage({
     null,
   );
   const [memoryExpanded, setMemoryExpanded] = useState(false);
+  const [responseContentHeight, setResponseContentHeight] = useState(0);
+  const [responseExpanded, setResponseExpanded] = useState(false);
   const [previewImage, setPreviewImage] =
     useState<GeneratedImageAttachment | null>(null);
   const [timelineExpanded, setTimelineExpanded] = useState(false);
@@ -57,6 +59,7 @@ export const ChatMessage = memo(function ChatMessage({
   const isUser = message.role === "user";
   const align = isUser ? "end" : "start";
   const variant = isUser ? "default" : "ghost";
+
   const markdownStyles = useMemo(
     () =>
       createMarkdownStyles({
@@ -186,6 +189,7 @@ export const ChatMessage = memo(function ChatMessage({
       event.kind !== "prompt" &&
       !(event.kind === "run" && event.status === "pending"),
   );
+  const visibleExecutionTimeline = executionTimeline.slice(-12);
   const generatedImages = message.metadata?.generatedImages ?? [];
   const memoryEventLabel =
     memoryEvents.length === 0
@@ -213,9 +217,41 @@ export const ChatMessage = memo(function ChatMessage({
             {isAssistant ? (
               <View className="gap-sp-3">
                 {message.content.trim() ? (
-                  <Markdown mergeStyle={false} style={markdownStyles}>
-                    {message.content}
-                  </Markdown>
+                  <>
+                    <View
+                      style={
+                        responseExpanded
+                          ? undefined
+                          : { maxHeight: 640, overflow: "hidden" }
+                      }
+                    >
+                      <View
+                        onLayout={(event) => {
+                          setResponseContentHeight(
+                            event.nativeEvent.layout.height,
+                          );
+                        }}
+                      >
+                        <Markdown mergeStyle={false} style={markdownStyles}>
+                          {message.content}
+                        </Markdown>
+                      </View>
+                    </View>
+                    {responseContentHeight > 640 ||
+                    message.content.length > 1200 ? (
+                      <Button
+                        onPress={() => {
+                          setResponseExpanded((current) => !current);
+                        }}
+                        size="xs"
+                        variant="ghost"
+                      >
+                        {responseExpanded
+                          ? "Collapse response"
+                          : "Show full response"}
+                      </Button>
+                    ) : null}
+                  </>
                 ) : memoryEventLabel ? (
                   <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
                     {memoryEventLabel}
@@ -332,8 +368,13 @@ export const ChatMessage = memo(function ChatMessage({
         ) : null}
 
         {isAssistant && timelineExpanded && executionTimeline.length > 0 ? (
-          <View className="max-w-full gap-sp-2 rounded-ui border border-border bg-card px-sp-3 py-sp-2 dark:border-border-dark dark:bg-card-dark">
-            {executionTimeline.map((event) => (
+          <View className="max-h-96 max-w-full gap-sp-2 overflow-hidden rounded-ui border border-border bg-card px-sp-3 py-sp-2 dark:border-border-dark dark:bg-card-dark">
+            {executionTimeline.length > visibleExecutionTimeline.length ? (
+              <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+                Showing the latest {visibleExecutionTimeline.length} of {executionTimeline.length} steps.
+              </Text>
+            ) : null}
+            {visibleExecutionTimeline.map((event) => (
               <View key={event.id} className="gap-1">
                 <View className="flex-row items-center justify-between gap-sp-3">
                   <Text className="flex-1 font-sans text-xs font-medium text-foreground dark:text-foreground-dark">
@@ -347,7 +388,11 @@ export const ChatMessage = memo(function ChatMessage({
                   {formatTimelineStatus(event.status)}
                 </Text>
                 {event.detail ? (
-                  <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+                  <Text
+                    className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark"
+                    ellipsizeMode="tail"
+                    numberOfLines={4}
+                  >
                     {event.detail}
                   </Text>
                 ) : null}

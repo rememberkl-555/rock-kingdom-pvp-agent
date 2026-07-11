@@ -5,7 +5,7 @@ export function summarizeValue(value: unknown) {
   const serialized =
     typeof value === "string" ? value : JSON.stringify(value, null, 2);
 
-  return serialized.length > 600 ? `${serialized.slice(0, 600)}...` : serialized;
+  return serialized.length > 240 ? `${serialized.slice(0, 240)}...` : serialized;
 }
 
 export function createRecord(input: {

@@ -396,7 +396,7 @@ function buildMessageDebugSummary(messages: StoredMessage[]) {
   return {
     count: messages.length,
     tail: messages.slice(-4).map((message) => ({
-      contentPreview: message.content.slice(0, 48),
+      contentLength: message.content.length,
       id: message.id,
       role: message.role,
       sequence: message.sequence,

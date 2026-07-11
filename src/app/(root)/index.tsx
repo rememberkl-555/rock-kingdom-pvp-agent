@@ -716,6 +716,9 @@ function ChatInput({
         fileContextSource: nextFileContextSource,
         selectedFileIds: previousSelectedFileIds,
       });
+      requestAnimationFrame(() => {
+        scrollToEnd();
+      });
       setFolderNotice(null);
     } catch (sendError) {
       logComposerDebug("handle-generate-send-error", {
@@ -747,6 +750,9 @@ function ChatInput({
         content: pendingFolderSend.content,
         fileContextSource: "external-folder",
         selectedFileIds: pendingFolderSend.selectedFileIds,
+      });
+      requestAnimationFrame(() => {
+        scrollToEnd();
       });
     } finally {
       setBusyAction(null);
