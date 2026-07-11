@@ -210,20 +210,16 @@ export const ChatMessage = memo(function ChatMessage({
       >
         <Bubble align={align} className={cn("max-w-full")} variant={variant}>
           <BubbleContent>
-            {isAssistant &&
-            message.status === "streaming" &&
-            !message.content ? (
-              <Loading label="Thinking..." />
-            ) : isAssistant && !message.content.trim() && memoryEventLabel ? (
-              <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
-                {memoryEventLabel}
-              </Text>
-            ) : isAssistant ? (
+            {isAssistant ? (
               <View className="gap-sp-3">
                 {message.content.trim() ? (
                   <Markdown mergeStyle={false} style={markdownStyles}>
                     {message.content}
                   </Markdown>
+                ) : memoryEventLabel ? (
+                  <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
+                    {memoryEventLabel}
+                  </Text>
                 ) : null}
                 {generatedImages.length > 0 ? (
                   <View className="gap-sp-2">
@@ -254,6 +250,9 @@ export const ChatMessage = memo(function ChatMessage({
                       </Pressable>
                     ))}
                   </View>
+                ) : null}
+                {message.status === "streaming" ? (
+                  <Loading label="Thinking..." />
                 ) : null}
               </View>
             ) : (

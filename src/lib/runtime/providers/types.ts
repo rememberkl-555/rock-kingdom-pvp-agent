@@ -19,7 +19,9 @@ export type GenerateModelTextStreamParams = {
   onEvent?: (eventName: string | null, data: unknown) => void;
   provider: ProviderConfig;
   providerOptions?: Record<string, unknown>;
+  requestHeaders?: Record<string, string>;
   secretStore: SecretStore;
+  sessionId?: string;
   system?: string;
   tools?: ToolSet;
 };

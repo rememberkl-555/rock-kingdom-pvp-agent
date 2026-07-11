@@ -24,41 +24,111 @@ export async function generateViaAISDK(
   providerModel: ProviderLanguageModel,
   params: GenerateModelTextStreamParams,
 ) {
+  return generateViaAISDKWithContinuation(providerModel, params, 0);
+}
+
+async function generateViaAISDKWithContinuation(
+  providerModel: ProviderLanguageModel,
+  params: GenerateModelTextStreamParams,
+  emptyToolContinuationCount: number,
+) {
   let finalText = "";
+  let providerError: unknown;
 
   try {
     const result = streamText({
       abortSignal: params.abortSignal,
+      headers: params.requestHeaders,
       model: providerModel,
       messages: params.messages,
+      onChunk: ({ chunk }) => {
+        params.onEvent?.(chunk.type, chunk);
+      },
+      onError: ({ error }) => {
+        providerError ??= error;
+        params.onEvent?.("error", error);
+      },
+      onStepEnd: (step) => {
+        params.onEvent?.("step-end", step);
+      },
+      onStepStart: (step) => {
+        params.onEvent?.("step-start", step);
+      },
+      onToolExecutionEnd: (event) => {
+        params.onEvent?.("tool-execution-end", event);
+      },
+      onToolExecutionStart: (event) => {
+        params.onEvent?.("tool-execution-start", event);
+      },
       providerOptions: params.providerOptions as any,
       stopWhen: stepCountIs(params.maxToolSteps),
       system: params.system,
       tools: params.tools,
     });
 
-    for await (const delta of result.textStream) {
-      finalText += delta;
-      params.onDelta?.(delta);
+    try {
+      for await (const delta of result.textStream) {
+        finalText += delta;
+        params.onDelta?.(delta);
+      }
+
+      const [, files, responseMessages, toolResults, usage, steps] = await Promise.all([
+        result.text,
+        result.files,
+        result.responseMessages,
+        result.toolResults,
+        result.usage,
+        result.steps,
+      ]);
+
+      if (
+        !finalText.trim() &&
+        toolResults.length > 0 &&
+        emptyToolContinuationCount < 2 &&
+        steps.length < params.maxToolSteps
+      ) {
+        return generateViaAISDKWithContinuation(
+          providerModel,
+          {
+            ...params,
+            maxToolSteps: params.maxToolSteps - steps.length,
+            messages: [
+              ...params.messages,
+              ...responseMessages,
+              {
+                role: "user",
+                content:
+                  "Continue the original task using the tool results above. Keep calling tools until the requested work is complete, then provide a final response.",
+              },
+            ],
+          },
+          emptyToolContinuationCount + 1,
+        );
+      }
+
+      return {
+        generatedFiles: files,
+        text: finalText,
+        toolResults,
+        usage,
+        stepLimitReached:
+          steps.length >= params.maxToolSteps &&
+          steps.at(-1)?.finishReason === "tool-calls",
+      };
+    } catch (error) {
+      // AI SDK exposes several derived promises. Drain all of them after a
+      // failed stream so React Native does not report secondary unhandled
+      // NoOutputGeneratedError rejections.
+      await Promise.allSettled([
+        result.text,
+        result.files,
+        result.responseMessages,
+        result.toolResults,
+        result.usage,
+        result.steps,
+      ]);
+      throw providerError ?? error;
     }
-
-    await result.text;
-    const [files, toolResults, usage, steps] = await Promise.all([
-      result.files,
-      result.toolResults,
-      result.usage,
-      result.steps,
-    ]);
-
-    return {
-      generatedFiles: files,
-      text: finalText,
-      toolResults,
-      usage,
-      stepLimitReached:
-        steps.length >= params.maxToolSteps &&
-        steps.at(-1)?.finishReason === "tool-calls",
-    };
   } catch (error) {
     if (
       params.abortSignal?.aborted ||
@@ -100,8 +170,21 @@ export async function generateViaAISDKNonStreaming(
 ) {
   const result = await generateText({
     abortSignal: params.abortSignal,
+    headers: params.requestHeaders,
     model: providerModel,
     messages: params.messages,
+    onStepEnd: (step) => {
+      params.onEvent?.("step-end", step);
+    },
+    onStepStart: (step) => {
+      params.onEvent?.("step-start", step);
+    },
+    onToolExecutionEnd: (event) => {
+      params.onEvent?.("tool-execution-end", event);
+    },
+    onToolExecutionStart: (event) => {
+      params.onEvent?.("tool-execution-start", event);
+    },
     providerOptions: params.providerOptions as any,
     stopWhen: stepCountIs(params.maxToolSteps),
     system: params.system,

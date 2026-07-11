@@ -29,7 +29,6 @@ export function AppSidebar() {
     currentConversation,
     runStatusByConversation,
     selectConversation,
-    deleteConversation,
   } = useChat();
 
   return (

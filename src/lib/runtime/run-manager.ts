@@ -62,10 +62,11 @@ export function createRunControllerRegistry() {
   const canceledRuns = new Set<string>();
   const approvalResolvers = new Map<
     string,
-    (decision: ToolApprovalDecision) => void
+    Map<string, (decision: ToolApprovalDecision) => void>
   >();
 
   return {
+    version: 2 as number,
     clear(runId: string) {
       abortControllers.delete(runId);
       approvalResolvers.delete(runId);
@@ -89,21 +90,32 @@ export function createRunControllerRegistry() {
     },
     registerPendingApproval(
       runId: string,
+      approvalId: string,
       resolver: (decision: ToolApprovalDecision) => void,
     ) {
-      approvalResolvers.set(runId, resolver);
+      const runApprovals = approvalResolvers.get(runId) ?? new Map();
+      runApprovals.set(approvalId, resolver);
+      approvalResolvers.set(runId, runApprovals);
     },
-    resolvePendingApproval(runId: string, decision: ToolApprovalDecision) {
-      const resolver = approvalResolvers.get(runId) ?? null;
+    resolvePendingApproval(
+      runId: string,
+      approvalId: string,
+      decision: ToolApprovalDecision,
+    ) {
+      const runApprovals = approvalResolvers.get(runId);
+      const resolver = runApprovals?.get(approvalId) ?? null;
 
-      approvalResolvers.delete(runId);
+      runApprovals?.delete(approvalId);
+      if (runApprovals?.size === 0) approvalResolvers.delete(runId);
       resolver?.(decision);
     },
     stopRun(runId: string) {
       const controller = abortControllers.get(runId);
       if (controller || claimedRuns.has(runId)) canceledRuns.add(runId);
       controller?.abort();
-      this.resolvePendingApproval(runId, "abort");
+      const runApprovals = approvalResolvers.get(runId);
+      approvalResolvers.delete(runId);
+      runApprovals?.forEach((resolve) => resolve("abort"));
       return Boolean(controller) || claimedRuns.has(runId);
     },
   };

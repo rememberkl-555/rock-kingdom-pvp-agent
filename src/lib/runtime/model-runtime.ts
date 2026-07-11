@@ -26,24 +26,62 @@ function mergeTools(
   } as Parameters<ModelRuntime["generateTextStream"]>[0]["tools"];
 }
 
-function normalizeCodexOAuthError(error: unknown, modelId: string) {
-  const message = error instanceof Error ? error.message : String(error);
-
-  if (
-    (/\b(400|403|404)\b/.test(message) &&
-      /model|unsupported|not found|access/i.test(message)) ||
-    /model.{0,80}(unavailable|unsupported|not found|access)/i.test(message)
-  ) {
-    return new Error(
-      `Model ${modelId} is unavailable for this ChatGPT account. Choose another Codex model or use an OpenAI API key.`,
-    );
-  }
+function normalizeCodexOAuthError(error: unknown) {
+  const details =
+    error && typeof error === "object"
+      ? (error as {
+          message?: string;
+          responseBody?: string;
+          statusCode?: number;
+        })
+      : undefined;
+  const message = [
+    details?.statusCode ? `HTTP ${details.statusCode}` : undefined,
+    details?.message,
+    details?.responseBody,
+  ]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .join(": ") || String(error);
 
   if (/\b401\b|unauthorized/i.test(message)) {
     return new Error("Your ChatGPT session expired. Please connect ChatGPT again.");
   }
 
-  return error instanceof Error ? error : new Error(message);
+  return new Error(message, {
+    cause: error,
+  });
+}
+
+function prepareCodexOAuthParams(
+  params: Parameters<ModelRuntime["generateTextStream"]>[0],
+) {
+  if (params.model.transport !== "codexResponses") {
+    return params;
+  }
+
+  const openaiOptions =
+    (params.providerOptions?.openai as Record<string, unknown> | undefined) ?? {};
+
+  return {
+    ...params,
+    providerOptions: {
+      ...(params.providerOptions ?? {}),
+      openai: {
+        ...openaiOptions,
+        instructions: params.system ?? null,
+        store: false,
+        strictJsonSchema: false,
+      },
+    },
+    requestHeaders: {
+      ...(params.requestHeaders ?? {}),
+      originator: "opencode",
+      ...(params.sessionId ? { "session-id": params.sessionId } : {}),
+    },
+    // The Codex Responses endpoint expects the prompt in `instructions`.
+    // Leaving it here makes the AI SDK add a system/developer input item too.
+    system: undefined,
+  };
 }
 
 export const modelRuntime: ModelRuntime = {
@@ -112,20 +150,18 @@ export const modelRuntime: ModelRuntime = {
       params.model.transport === "codexResponses"
         ? provider.responses(params.model.modelId)
         : provider.chat(params.model.modelId);
+    const runtimeParams = prepareCodexOAuthParams({
+      ...params,
+      tools: mergeTools(params.tools, providerTools),
+    });
 
     try {
       return shouldUseStreamingAISDK()
-        ? await generateViaAISDK(languageModel, {
-            ...params,
-            tools: mergeTools(params.tools, providerTools),
-          })
-        : await generateViaAISDKNonStreaming(languageModel, {
-            ...params,
-            tools: mergeTools(params.tools, providerTools),
-          });
+        ? await generateViaAISDK(languageModel, runtimeParams)
+        : await generateViaAISDKNonStreaming(languageModel, runtimeParams);
     } catch (error) {
       if (params.model.transport === "codexResponses") {
-        throw normalizeCodexOAuthError(error, params.model.modelId);
+        throw normalizeCodexOAuthError(error);
       }
 
       throw error;

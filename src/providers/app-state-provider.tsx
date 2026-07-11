@@ -16,9 +16,6 @@ import {
   DEFAULT_BUILT_IN_TOOL_SETTINGS,
 } from "@/lib/config/built-in-tools";
 import {
-  resolveConfiguredModel,
-} from "@/lib/config/registry";
-import {
   fetchLiveModelCatalogCached,
   getCatalogModelDefinitionsForProvider,
   type LiveCatalogModel,
@@ -27,6 +24,7 @@ import {
   fetchModelsDevCatalogCached,
   getModelsDevDefinitionsForProvider,
 } from "@/lib/config/models-dev-catalog";
+import { resolveConfiguredModel } from "@/lib/config/registry";
 import { createRepositories } from "@/lib/db/database";
 import { createExternalFolderService } from "@/lib/external-folder/external-folder-service";
 import { connectMcpOAuth } from "@/lib/mcp/oauth";
@@ -331,7 +329,17 @@ const EMPTY_SNAPSHOT: AppStateSnapshot = {
 };
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
-const REQUEST_INACTIVITY_TIMEOUT_MS = 45000;
+const REQUEST_INACTIVITY_TIMEOUT_MS = 5 * 60_000;
+
+const BASE_AGENT_SYSTEM_PROMPT = [
+  "You are Mobile Agent, a capable assistant that helps the user complete tasks on their device and in their selected workspace.",
+  "Follow the user's request carefully and work toward a complete, useful result.",
+  "Be accurate about what you know, what tools confirmed, and what actions were actually completed.",
+  "Never claim that an external action or file change happened unless a tool result confirms it.",
+  "Use the available context and tools when they materially help, while respecting approval and access boundaries.",
+  "Ask a concise clarifying question only when a missing choice would materially change the result; otherwise make reasonable assumptions and proceed.",
+  "Keep user-facing responses clear and concise unless the task calls for more detail.",
+].join("\n\n");
 
 function buildConversationTitle(input: string) {
   const normalized = input.replace(/\s+/g, " ").trim();
@@ -808,6 +816,17 @@ function describePromptArtifactLocation(artifact: PromptArtifact) {
   return `${artifact.relativePath} (${artifact.displayName})`;
 }
 
+const CODEX_OAUTH_MODELS = new Set(["gpt-5.5"]);
+
+function isCodexOAuthModel(modelId: string) {
+  if (CODEX_OAUTH_MODELS.has(modelId)) {
+    return true;
+  }
+
+  const version = modelId.match(/^gpt-(\d+\.\d+)/)?.[1];
+  return version ? Number(version) > 5.4 : false;
+}
+
 async function resolveConfig(input: {
   modelPresets: ModelPreset[];
   providers: ProviderConfig[];
@@ -858,18 +877,41 @@ async function resolveConfig(input: {
       const builtInModels: CuratedModelDefinition[] =
         provider.family === "openai" && provider.authType === "oauth"
           ? [
-              { id: "gpt-5.5", kind: "chat", label: "GPT-5.5", capabilities: { tools: true } },
-              { id: "gpt-5.4", kind: "chat", label: "GPT-5.4", capabilities: { tools: true } },
-              { id: "gpt-5.4-mini", kind: "small", label: "GPT-5.4 mini", capabilities: { tools: true } },
+              {
+                id: "gpt-5.5",
+                kind: "chat",
+                label: "GPT-5.5",
+                capabilities: { tools: true },
+              },
+              {
+                id: "gpt-5.4",
+                kind: "chat",
+                label: "GPT-5.4",
+                capabilities: { tools: true },
+              },
+              {
+                id: "gpt-5.4-mini",
+                kind: "small",
+                label: "GPT-5.4 mini",
+                capabilities: { tools: true },
+              },
             ]
           : [];
       const discoveredModels = [
         ...getCatalogModelDefinitionsForProvider(liveCatalog, provider),
         ...getModelsDevDefinitionsForProvider(modelsDevCatalog, provider),
-      ].filter(
-        (model, index, models) =>
-          models.findIndex((candidate) => candidate.id === model.id) === index,
-      );
+      ]
+        .filter(
+          (model) =>
+            provider.family !== "openai" ||
+            provider.authType !== "oauth" ||
+            isCodexOAuthModel(model.id),
+        )
+        .filter(
+          (model, index, models) =>
+            models.findIndex((candidate) => candidate.id === model.id) ===
+            index,
+        );
       const models = [
         ...discoveredModels,
         ...builtInModels.filter(
@@ -880,10 +922,11 @@ async function resolveConfig(input: {
           .filter(
             (preset) =>
               preset.providerId === provider.id &&
+              (provider.family !== "openai" ||
+                provider.authType !== "oauth" ||
+                isCodexOAuthModel(preset.modelId)) &&
               !discoveredModels.some((model) => model.id === preset.modelId) &&
-              !builtInModels.some(
-                (model) => model.id === preset.modelId,
-              ),
+              !builtInModels.some((model) => model.id === preset.modelId),
           )
           .map((preset) => ({
             id: preset.modelId,
@@ -961,6 +1004,9 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
   );
   const externalFolderServiceRef = useRef(createExternalFolderService());
   const runRegistryRef = useRef(createRunControllerRegistry());
+  if (runRegistryRef.current.version !== 2) {
+    runRegistryRef.current = createRunControllerRegistry();
+  }
   const [snapshot, setSnapshot] = useState<AppStateSnapshot>(EMPTY_SNAPSHOT);
   const [ready, setReady] = useState(false);
   const [hydrating, setHydrating] = useState(true);
@@ -987,12 +1033,16 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
   }, [snapshot.currentConversation?.id, snapshot.messages]);
 
   function resolvePendingToolApproval(
-    runId: string,
+    approval: PendingToolApproval,
     decision: ToolApprovalDecision,
   ) {
-    runRegistryRef.current.resolvePendingApproval(runId, decision);
+    runRegistryRef.current.resolvePendingApproval(
+      approval.runId,
+      approval.id,
+      decision,
+    );
     setPendingToolApprovals((current) =>
-      current.filter((approval) => approval.runId !== runId),
+      current.filter((item) => item.id !== approval.id),
     );
   }
 
@@ -1014,13 +1064,10 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
       request,
     );
 
-    setPendingToolApprovals((current) => [
-      ...current.filter((item) => item.runId !== run.id),
-      approval,
-    ]);
+    setPendingToolApprovals((current) => [...current, approval]);
 
     return await new Promise<ToolApprovalDecision>((resolve) => {
-      runRegistryRef.current.registerPendingApproval(run.id, resolve);
+      runRegistryRef.current.registerPendingApproval(run.id, approval.id, resolve);
     });
   }
 
@@ -1631,7 +1678,9 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
   }
 
   async function updateMaxToolSteps(maxToolSteps: number) {
-    await repositoriesRef.current.configRepository.setMaxToolSteps(maxToolSteps);
+    await repositoriesRef.current.configRepository.setMaxToolSteps(
+      maxToolSteps,
+    );
     await hydrate();
   }
 
@@ -1979,7 +2028,6 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
   }
 
   async function executeClaimedAgentRun(runId: string) {
-
     const repositories = repositoriesRef.current;
     const run =
       snapshotRef.current.agentRuns.find((item) => item.id === runId) ??
@@ -2262,6 +2310,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
       await setRunWaitingForApproval();
 
       const decision = await requestToolApproval(run, request);
+      markActivity();
 
       if (decision !== "abort") {
         await updateRunRecord(run.id, {
@@ -2637,12 +2686,25 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
             canWrite: resolvedModel.supportsTools,
           })
         : undefined;
+      const toolLoopRuntimeSystem = runtimeTools
+          ? [
+            "Complete the user's requested task before ending your response.",
+            "Before the first tool call, briefly tell the user what you are about to do.",
+            "An inspection or listing tool is only an intermediate step when the user requested a change.",
+            "After every tool result, evaluate what remains and continue calling the available tools until the task is complete or a concrete blocker prevents progress.",
+            "Between tool calls, give a short, useful progress update when the result changes your next action; do not expose private chain-of-thought or hidden reasoning.",
+            "Do not stop silently after a successful tool call.",
+            "When the task is complete, provide a concise final response describing what you actually completed.",
+          ].join("\n")
+        : undefined;
       const runtimeSystem =
         [
+          BASE_AGENT_SYSTEM_PROMPT,
           builtInRuntimeSystem,
           mcpRuntime?.systemPrompt,
           memoryRuntimeSystem,
           skillsRuntimeSystem,
+          toolLoopRuntimeSystem,
         ]
           .filter((part): part is string => Boolean(part?.trim()))
           .join("\n\n") || undefined;
@@ -2746,6 +2808,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         },
         provider,
         secretStore: secureSecretStore,
+        sessionId: run.id,
         system: runtimeSystem,
         tools: runtimeTools,
       });
@@ -3321,7 +3384,9 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
     });
 
     void executeAgentRun(agentRun.id).catch((runError) => {
-      setError(runError instanceof Error ? runError.message : "Failed to start run.");
+      setError(
+        runError instanceof Error ? runError.message : "Failed to start run.",
+      );
     });
   }
 
@@ -3342,7 +3407,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
       value={{
         approvePendingToolApproval: () => {
           if (pendingToolApproval) {
-            resolvePendingToolApproval(pendingToolApproval.runId, "approve");
+            resolvePendingToolApproval(pendingToolApproval, "approve");
           }
         },
         agentRuns: snapshot.agentRuns,
@@ -3369,7 +3434,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         pendingToolApproval,
         denyPendingToolApproval: () => {
           if (pendingToolApproval) {
-            resolvePendingToolApproval(pendingToolApproval.runId, "deny");
+            resolvePendingToolApproval(pendingToolApproval, "deny");
           }
         },
         deleteMcpServer,

@@ -1,4 +1,5 @@
 import { createOpenAI } from "@ai-sdk/openai";
+import { Platform } from "react-native";
 
 import {
   getValidOpenAiTokenInfo,
@@ -59,6 +60,7 @@ function buildCodexRequestInit(init?: RequestInit): RequestInit | undefined {
 
   try {
     const body = JSON.parse(init.body) as Record<string, unknown>;
+    delete body.max_output_tokens;
 
     return {
       ...init,
@@ -102,7 +104,8 @@ async function fetchWithCodexOAuth(
 
     headers.delete("authorization");
     headers.set("authorization", `Bearer ${accessToken}`);
-    headers.set("openai-originator", "opencode");
+    headers.set("originator", "opencode");
+    headers.set("User-Agent", `mobile-agent/1.1.0 (${Platform.OS})`);
 
     if (accountId) {
       headers.set("ChatGPT-Account-Id", accountId);

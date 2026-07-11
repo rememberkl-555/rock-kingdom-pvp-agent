@@ -235,7 +235,7 @@ export async function handleLogin() {
       id_token_add_organizations: "true",
       codex_cli_simplified_flow: "true",
       state,
-      originator: "mobile-agent",
+      originator: "opencode",
     }).toString();
 
   const browserPromise = WebBrowser.openBrowserAsync(authUrl);

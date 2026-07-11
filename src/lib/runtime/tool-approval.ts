@@ -9,6 +9,13 @@ import type {
 
 type ToolApprovalDecision = "approve" | "deny" | "abort";
 
+let approvalSequence = 0;
+
+function createApprovalId(toolName: string) {
+  approvalSequence += 1;
+  return `${toolName}:${Date.now()}:${approvalSequence}`;
+}
+
 export function wrapToolsWithApproval<T extends ToolSet>(
   tools: T,
   input: {
@@ -45,7 +52,7 @@ export function wrapToolsWithApproval<T extends ToolSet>(
 
             if (input.mode === "ask" && needsApproval) {
               const decision = await input.requestApproval({
-                id: `${toolName}:${Date.now()}`,
+                id: createApprovalId(toolName),
                 inputSummary,
                 toolName,
               });
