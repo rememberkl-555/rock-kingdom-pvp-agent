@@ -18,6 +18,14 @@ export type GenerateModelTextStreamParams = {
   onDelta?: (delta: string) => void;
   onEvent?: (eventName: string | null, data: unknown) => void;
   provider: ProviderConfig;
+  reasoning?:
+    | "provider-default"
+    | "none"
+    | "minimal"
+    | "low"
+    | "medium"
+    | "high"
+    | "xhigh";
   providerOptions?: Record<string, unknown>;
   requestHeaders?: Record<string, string>;
   secretStore: SecretStore;

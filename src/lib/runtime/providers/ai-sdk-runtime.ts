@@ -61,6 +61,7 @@ async function generateViaAISDKWithContinuation(
         params.onEvent?.("tool-execution-start", event);
       },
       providerOptions: params.providerOptions as any,
+      reasoning: params.reasoning,
       stopWhen: stepCountIs(params.maxToolSteps),
       system: params.system,
       tools: params.tools,
@@ -186,10 +187,28 @@ export async function generateViaAISDKNonStreaming(
       params.onEvent?.("tool-execution-start", event);
     },
     providerOptions: params.providerOptions as any,
+    reasoning: params.reasoning,
     stopWhen: stepCountIs(params.maxToolSteps),
     system: params.system,
     tools: params.tools,
   });
+
+  if (result.reasoningText?.trim()) {
+    const reasoningId = `non-streaming-${Date.now()}`;
+    params.onEvent?.("reasoning-start", {
+      id: reasoningId,
+      type: "reasoning-start",
+    });
+    params.onEvent?.("reasoning-delta", {
+      id: reasoningId,
+      text: result.reasoningText,
+      type: "reasoning-delta",
+    });
+    params.onEvent?.("reasoning-end", {
+      id: reasoningId,
+      type: "reasoning-end",
+    });
+  }
 
   if (result.text) {
     for (const chunk of chunkText(result.text)) {

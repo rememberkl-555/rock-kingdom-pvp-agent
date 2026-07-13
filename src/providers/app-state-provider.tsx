@@ -108,6 +108,7 @@ import type {
   PendingToolApprovalRequest,
   PromptArtifact,
   ProviderConfig,
+  ReasoningBlock,
   ResolvedConfig,
   ResolvedModel,
   SendMessageInput,
@@ -792,6 +793,7 @@ function buildAssistantMetadata(input: {
   generatedImages?: MessageMetadata["generatedImages"];
   memoryEvents?: MemoryEvent[];
   promptArtifacts?: PromptArtifact[];
+  reasoning?: ReasoningBlock[];
   runId?: string | null;
   toolExecutions: ToolExecutionRecord[];
   usage?: ModelUsageSnapshot | null;
@@ -820,6 +822,10 @@ function buildAssistantMetadata(input: {
 
   if (input.promptArtifacts && input.promptArtifacts.length > 0) {
     metadata.promptArtifacts = input.promptArtifacts;
+  }
+
+  if (input.reasoning && input.reasoning.length > 0) {
+    metadata.reasoning = input.reasoning;
   }
 
   if (input.toolExecutions.length > 0) {
@@ -2481,6 +2487,9 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
     const promptArtifacts = [
       ...(assistantMessage.metadata?.promptArtifacts ?? []),
     ] as PromptArtifact[];
+    const reasoning = [
+      ...(assistantMessage.metadata?.reasoning ?? []),
+    ] as ReasoningBlock[];
     const executionTimeline = [
       ...(assistantMessage.metadata?.executionTimeline ?? []),
     ] as ExecutionTimelineEvent[];
@@ -2513,6 +2522,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         executionTimeline,
         memoryEvents,
         promptArtifacts,
+        reasoning,
         runId: run.id,
         toolExecutions,
       });
@@ -3026,10 +3036,54 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
           schedulePersist("streaming");
           syncAssistantSnapshot("streaming");
         },
-        onEvent: () => {
+        onEvent: (eventName, data) => {
           markActivity();
+
+          if (
+            eventName !== "reasoning-start" &&
+            eventName !== "reasoning-delta" &&
+            eventName !== "reasoning-end"
+          ) {
+            return;
+          }
+
+          const event =
+            data && typeof data === "object"
+              ? (data as { id?: unknown; text?: unknown })
+              : null;
+          const id = typeof event?.id === "string" ? event.id : null;
+
+          if (!id) {
+            return;
+          }
+
+          let block = reasoning.find((item) => item.id === id);
+
+          if (!block) {
+            block = {
+              id,
+              text: "",
+              startedAt: new Date().toISOString(),
+              completedAt: null,
+            };
+            reasoning.push(block);
+          }
+
+          if (
+            eventName === "reasoning-delta" &&
+            typeof event?.text === "string"
+          ) {
+            block.text += event.text;
+          }
+
+          if (eventName === "reasoning-end") {
+            block.completedAt = new Date().toISOString();
+          }
+
+          refreshAssistantState?.();
         },
         provider,
+        reasoning: resolvedModel.supportsReasoning ? "medium" : undefined,
         secretStore: secureSecretStore,
         sessionId: run.id,
         system: runtimeSystem,
@@ -3086,6 +3140,10 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         generatedImages,
         memoryEvents,
         promptArtifacts,
+        reasoning: reasoning.map((block) => ({
+          ...block,
+          completedAt: block.completedAt ?? new Date().toISOString(),
+        })),
         runId: run.id,
         toolExecutions,
         usage: assistantUsage,
@@ -3180,6 +3238,10 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         ],
         memoryEvents,
         promptArtifacts,
+        reasoning: reasoning.map((block) => ({
+          ...block,
+          completedAt: block.completedAt ?? new Date().toISOString(),
+        })),
         runId: run.id,
         toolExecutions,
       });

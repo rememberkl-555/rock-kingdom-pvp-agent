@@ -109,6 +109,7 @@ export type ModelUsageSnapshot = {
 export type ModelCapabilities = {
   imageGeneration: boolean;
   imageInput: boolean;
+  reasoning: boolean;
   tools: boolean;
 };
 
@@ -145,6 +146,13 @@ export type ExecutionTimelineEvent = {
   createdAt: string;
 };
 
+export type ReasoningBlock = {
+  id: string;
+  text: string;
+  startedAt: string;
+  completedAt: string | null;
+};
+
 export type MessageMetadata = {
   appliedSkillIds?: string[];
   executionTimeline?: ExecutionTimelineEvent[];
@@ -153,6 +161,7 @@ export type MessageMetadata = {
   generatedImages?: GeneratedImageAttachment[];
   memoryEvents?: MemoryEvent[];
   promptArtifacts?: PromptArtifact[];
+  reasoning?: ReasoningBlock[];
   runId?: string | null;
   selectedFileIds?: string[];
   toolExecutions?: ToolExecutionRecord[];
@@ -313,6 +322,7 @@ export type ResolvedModel = {
   supportsTools: boolean;
   supportsImageInput: boolean;
   supportsImageGeneration: boolean;
+  supportsReasoning: boolean;
   transport: ModelTransport;
   options: Record<string, unknown> | null;
 };

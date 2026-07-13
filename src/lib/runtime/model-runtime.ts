@@ -118,16 +118,32 @@ export const modelRuntime: ModelRuntime = {
           "https://generativelanguage.googleapis.com/v1beta",
       });
       const languageModel = provider.languageModel(params.model.modelId);
-      const providerOptions = params.model.supportsImageGeneration
-        ? {
-            ...(params.providerOptions ?? {}),
-            google: {
-              ...((params.providerOptions?.google as Record<string, unknown> | undefined) ??
-                {}),
-              responseModalities: ["TEXT", "IMAGE"] as const,
-            },
-          }
-        : params.providerOptions;
+      const googleOptions =
+        (params.providerOptions?.google as
+          | Record<string, unknown>
+          | undefined) ?? {};
+      const providerOptions =
+        params.model.supportsImageGeneration || params.model.supportsReasoning
+          ? {
+              ...(params.providerOptions ?? {}),
+              google: {
+                ...googleOptions,
+                ...(params.model.supportsImageGeneration
+                  ? { responseModalities: ["TEXT", "IMAGE"] as const }
+                  : {}),
+                ...(params.model.supportsReasoning
+                  ? {
+                      thinkingConfig: {
+                        ...((googleOptions.thinkingConfig as
+                          | Record<string, unknown>
+                          | undefined) ?? {}),
+                        includeThoughts: true,
+                      },
+                    }
+                  : {}),
+              },
+            }
+          : params.providerOptions;
 
       return shouldUseStreamingAISDK()
         ? generateViaAISDK(languageModel, {

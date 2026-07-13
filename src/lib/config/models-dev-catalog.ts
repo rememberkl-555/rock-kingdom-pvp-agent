@@ -9,6 +9,7 @@ type ModelsDevModel = {
   status?: string;
   tool_call?: boolean;
   attachment?: boolean;
+  reasoning?: boolean;
   modalities?: {
     input?: string[];
     output?: string[];
@@ -80,6 +81,7 @@ export function getModelsDevDefinitionsForProvider(
           imageGeneration,
           imageInput:
             inputModalities.includes("image") || model.attachment === true,
+          reasoning: model.reasoning === true ? true : undefined,
           tools: model.tool_call === true,
         },
         id,

@@ -12,7 +12,7 @@ import {
   Download,
   Share2,
 } from "lucide-react-native";
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import Markdown from "react-native-markdown-display";
 
@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import type {
   ExecutionTimelineEvent,
   GeneratedImageAttachment,
+  ReasoningBlock,
   StoredMessage,
 } from "@/types/app-state";
 import { Asset } from "expo-media-library";
@@ -50,6 +51,10 @@ export const ChatMessage = memo(function ChatMessage({
     null,
   );
   const [memoryExpanded, setMemoryExpanded] = useState(false);
+  const [reasoningExpanded, setReasoningExpanded] = useState(
+    message.status === "streaming",
+  );
+  const previousMessageStatusRef = useRef(message.status);
   const [responseContentHeight, setResponseContentHeight] = useState(0);
   const [responseExpanded, setResponseExpanded] = useState(false);
   const [previewImage, setPreviewImage] =
@@ -78,6 +83,23 @@ export const ChatMessage = memo(function ChatMessage({
       theme.textSecondary,
     ],
   );
+  const reasoningMarkdownStyles = useMemo(
+    () =>
+      createMarkdownStyles({
+        borderColor: theme.border,
+        codeBackground: theme.backgroundElement,
+        inlineCodeBackground: theme.backgroundSelected,
+        linkColor: theme.textSecondary,
+        mutedText: theme.textSecondary,
+        text: theme.textSecondary,
+      }),
+    [
+      theme.border,
+      theme.backgroundElement,
+      theme.backgroundSelected,
+      theme.textSecondary,
+    ],
+  );
 
   useEffect(() => {
     if (!copied) {
@@ -92,6 +114,17 @@ export const ChatMessage = memo(function ChatMessage({
       clearTimeout(timeout);
     };
   }, [copied]);
+
+  useEffect(() => {
+    if (
+      previousMessageStatusRef.current === "streaming" &&
+      message.status !== "streaming"
+    ) {
+      setReasoningExpanded(false);
+    }
+
+    previousMessageStatusRef.current = message.status;
+  }, [message.status]);
 
   const handleCopy = async () => {
     if (!message.content.trim()) {
@@ -191,6 +224,19 @@ export const ChatMessage = memo(function ChatMessage({
   );
   const visibleExecutionTimeline = executionTimeline.slice(-12);
   const generatedImages = message.metadata?.generatedImages ?? [];
+  const reasoningBlocks = message.metadata?.reasoning ?? [];
+  const reasoningText = reasoningBlocks
+    .map((block) => block.text.trim())
+    .filter(Boolean)
+    .join("\n\n");
+  const reasoningInProgress = reasoningBlocks.some(
+    (block) => block.completedAt === null,
+  );
+  const reasoningLabel = reasoningText
+    ? message.status === "streaming" && reasoningInProgress
+      ? "Thinking…"
+      : `Thought for ${formatReasoningDuration(reasoningBlocks)}`
+    : null;
   const memoryEventLabel =
     memoryEvents.length === 0
       ? null
@@ -216,6 +262,55 @@ export const ChatMessage = memo(function ChatMessage({
           <BubbleContent>
             {isAssistant ? (
               <View className="gap-sp-3">
+                {reasoningLabel ? (
+                  <View className="gap-sp-2">
+                    <Pressable
+                      accessibilityRole="button"
+                      className="self-start flex-row items-center gap-sp-2"
+                      onPress={() => {
+                        setReasoningExpanded((current) => !current);
+                      }}
+                      style={({ pressed }) =>
+                        pressed ? { opacity: 0.72 } : null
+                      }
+                    >
+                      <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
+                        {reasoningLabel}
+                      </Text>
+                      <ChevronDown
+                        color={theme.textSecondary}
+                        size={14}
+                        style={{
+                          transform: [
+                            { rotate: reasoningExpanded ? "180deg" : "0deg" },
+                          ],
+                        }}
+                      />
+                    </Pressable>
+
+                    {reasoningExpanded ? (
+                      <View className="flex-row gap-sp-2">
+                        <View className="w-5 items-center">
+                          <Clock3 color={theme.textSecondary} size={16} />
+                          <View className="my-1 min-h-6 w-px flex-1 bg-border dark:bg-border-dark" />
+                          <Check color={theme.textSecondary} size={16} />
+                        </View>
+                        <View className="min-w-0 flex-1 gap-sp-3 pb-0.5">
+                          <Markdown
+                            mergeStyle={false}
+                            style={reasoningMarkdownStyles}
+                          >
+                            {reasoningText}
+                          </Markdown>
+                          <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
+                            {reasoningInProgress ? "Working" : "Done"}
+                          </Text>
+                        </View>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+
                 {message.content.trim() ? (
                   <>
                     <View
@@ -566,6 +661,38 @@ function formatTimelineStatus(
   }
 
   return "Info";
+}
+
+function formatReasoningDuration(blocks: ReasoningBlock[]) {
+  const durationMs = blocks.reduce((total, block) => {
+    const startedAt = new Date(block.startedAt).getTime();
+    const completedAt = block.completedAt
+      ? new Date(block.completedAt).getTime()
+      : Date.now();
+
+    if (
+      Number.isNaN(startedAt) ||
+      Number.isNaN(completedAt) ||
+      completedAt < startedAt
+    ) {
+      return total;
+    }
+
+    return total + completedAt - startedAt;
+  }, 0);
+
+  if (durationMs < 1000) {
+    return "<1s";
+  }
+
+  if (durationMs < 60_000) {
+    return `${Math.max(1, Math.round(durationMs / 1000))}s`;
+  }
+
+  const minutes = Math.floor(durationMs / 60_000);
+  const seconds = Math.round((durationMs % 60_000) / 1000);
+
+  return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
 }
 
 function formatTimelineTitle(event: ExecutionTimelineEvent) {

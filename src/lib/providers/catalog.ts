@@ -109,6 +109,7 @@ export function resolveConfiguredModel(input: {
     supportsTools: profile.capabilities.tools,
     supportsImageInput: profile.capabilities.imageInput,
     supportsImageGeneration: profile.capabilities.imageGeneration,
+    supportsReasoning: profile.capabilities.reasoning,
     transport: profile.transport,
     options: input.options ?? input.preset?.options ?? suggestion.options ?? null,
   };

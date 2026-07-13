@@ -17,28 +17,39 @@ const FAMILY_DEFAULT_CAPABILITIES: Record<ProviderFamily, ModelCapabilities> = {
     tools: true,
     imageInput: true,
     imageGeneration: true,
+    reasoning: false,
   },
   anthropic: {
     tools: true,
     imageInput: true,
     imageGeneration: false,
+    reasoning: false,
   },
   google: {
     tools: true,
     imageInput: true,
     imageGeneration: false,
+    reasoning: false,
   },
   openrouter: {
     tools: true,
     imageInput: false,
     imageGeneration: false,
+    reasoning: false,
   },
   "openai-compatible": {
     tools: false,
     imageInput: false,
     imageGeneration: false,
+    reasoning: false,
   },
 };
+
+function modelIdLikelySupportsReasoning(modelId: string) {
+  return /(?:^|[\/.:-])(?:gpt-5|o[134](?:-|$)|claude-(?:3-7|4)|gemini-(?:2\.5|3)|deepseek-r1|qwq|reasoning|thinking)/i.test(
+    modelId,
+  );
+}
 
 const FAMILY_DEFAULT_TRANSPORT: Record<ProviderFamily, ModelTransport> = {
   openai: "openaiResponses",
@@ -66,6 +77,9 @@ export function resolveModelProfile(input: {
         tools: hintCapabilities?.tools ?? true,
         imageGeneration: false,
         imageInput: hintCapabilities?.imageInput ?? false,
+        reasoning:
+          hintCapabilities?.reasoning ??
+          modelIdLikelySupportsReasoning(modelId),
       },
     };
   }
@@ -80,6 +94,9 @@ export function resolveModelProfile(input: {
         ...hintCapabilities,
         imageGeneration:
           hintCapabilities?.imageGeneration ?? !isChatOnly,
+        reasoning:
+          hintCapabilities?.reasoning ??
+          modelIdLikelySupportsReasoning(modelId),
       },
     };
   }
@@ -89,6 +106,9 @@ export function resolveModelProfile(input: {
     capabilities: {
       ...FAMILY_DEFAULT_CAPABILITIES[family],
       ...hintCapabilities,
+      reasoning:
+        hintCapabilities?.reasoning ??
+        modelIdLikelySupportsReasoning(modelId),
     },
   };
 }

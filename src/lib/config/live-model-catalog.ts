@@ -232,6 +232,11 @@ export function getCatalogModelDefinitionsForProvider(
         capabilities: {
           imageGeneration,
           imageInput: model.tags.includes("vision"),
+          reasoning:
+            model.tags.includes("reasoning") ||
+            model.tags.includes("thinking")
+              ? true
+              : undefined,
           tools: model.tags.includes("tool-use"),
         },
         id,
