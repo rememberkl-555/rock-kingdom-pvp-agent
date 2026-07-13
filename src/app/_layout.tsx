@@ -1,6 +1,7 @@
 import { useAppState } from "@/hooks/use-app-state";
 import { useChat } from "@/hooks/use-chat";
 import { useTheme } from "@/hooks/use-theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { migrateAppDatabase } from "@/lib/db/database";
 import { AppStateProvider } from "@/providers/app-state-provider";
 import { UpdateProvider, useUpdate } from "@/providers/check-for-updates";
@@ -17,7 +18,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { SQLiteProvider } from "expo-sqlite";
 import { X } from "lucide-react-native";
 import { useEffect, useRef } from "react";
-import { Pressable, Text, useColorScheme, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import "./global.css";
 

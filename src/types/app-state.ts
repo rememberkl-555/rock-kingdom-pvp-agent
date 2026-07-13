@@ -20,6 +20,7 @@ export type ModelTransport =
   | "openaiCompatible"
   | "openaiResponses";
 export type ToolApprovalMode = "ask" | "auto";
+export type ThemeMode = "system" | "light" | "dark";
 export type McpServerTransport = "http" | "sse";
 export type McpServerAuthMode = "none" | "headers" | "oauth";
 export type McpServerStatus = "untested" | "connected" | "failed";
@@ -282,6 +283,7 @@ export type AppSettings = {
   databaseUrl: string | null;
   memoryEnabled: boolean;
   maxToolSteps: number;
+  themeMode: ThemeMode;
   toolApprovalMode: ToolApprovalMode;
 };
 

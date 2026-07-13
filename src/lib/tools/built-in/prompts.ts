@@ -1,28 +1,8 @@
 import type { WorkspaceRepository } from "@/lib/db/database";
-import { createFileSelectionPrompt } from "@/lib/tools/built-in/shared";
-import { isTextWorkspaceFile, createWorkspaceFileService } from "@/lib/workspace/workspace-file-service";
-
-export async function buildWorkspaceSystemPrompt(input: {
-  repository: WorkspaceRepository;
-  selectedFileIds: string[];
-}) {
-  const files = await input.repository.list();
-  const selectedFiles = files.filter((file) =>
-    input.selectedFileIds.includes(file.id),
-  );
-
-  return [
-    "You are a mobile workspace assistant.",
-    "Only operate on files using the provided tools.",
-    "Do not invent file contents or pretend a file changed unless a tool confirmed it.",
-    selectedFiles.length > 0
-      ? `The user selected these files for the current turn: ${selectedFiles
-          .map((file) => `${file.displayName} (${file.id})`)
-          .join(", ")}.`
-      : "The user did not preselect files for this turn.",
-    createFileSelectionPrompt(files, input.selectedFileIds),
-  ].join("\n\n");
-}
+import {
+  createWorkspaceFileService,
+  isTextWorkspaceFile,
+} from "@/lib/workspace/workspace-file-service";
 
 export async function buildSelectedFilesInlineContext(input: {
   repository: WorkspaceRepository;
@@ -39,8 +19,8 @@ export async function buildSelectedFilesInlineContext(input: {
   }
 
   const sections: string[] = [
-    "The user selected workspace files for this turn.",
-    "Use the following file contents as trusted context.",
+    "Files attached by the user for this turn:",
+    "Use the following file contents as user-provided context.",
     "If a file is binary or unreadable as text, do not invent its contents.",
   ];
 

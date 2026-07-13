@@ -374,30 +374,35 @@ export const ChatMessage = memo(function ChatMessage({
                 Showing the latest {visibleExecutionTimeline.length} of {executionTimeline.length} steps.
               </Text>
             ) : null}
-            {visibleExecutionTimeline.map((event) => (
-              <View key={event.id} className="gap-1">
-                <View className="flex-row items-center justify-between gap-sp-3">
-                  <Text className="flex-1 font-sans text-xs font-medium text-foreground dark:text-foreground-dark">
-                    {formatTimelineTitle(event)}
-                  </Text>
+            {visibleExecutionTimeline.map((event) => {
+              const eventIndex = executionTimeline.indexOf(event);
+              const previousEvent = executionTimeline[eventIndex - 1];
+
+              return (
+                <View key={event.id} className="gap-1">
+                  <View className="flex-row items-center justify-between gap-sp-3">
+                    <Text className="flex-1 font-sans text-xs font-medium text-foreground dark:text-foreground-dark">
+                      {formatTimelineTitle(event)}
+                    </Text>
+                    <Text className="font-sans text-[11px] text-muted-foreground dark:text-muted-foreground-dark">
+                      {formatTimelineDuration(previousEvent, event)}
+                    </Text>
+                  </View>
                   <Text className="font-sans text-[11px] text-muted-foreground dark:text-muted-foreground-dark">
-                    {formatTimelineTime(event.createdAt)}
+                    {formatTimelineStatus(event.status)}
                   </Text>
+                  {event.detail ? (
+                    <Text
+                      className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark"
+                      ellipsizeMode="tail"
+                      numberOfLines={4}
+                    >
+                      {event.detail}
+                    </Text>
+                  ) : null}
                 </View>
-                <Text className="font-sans text-[11px] text-muted-foreground dark:text-muted-foreground-dark">
-                  {formatTimelineStatus(event.status)}
-                </Text>
-                {event.detail ? (
-                  <Text
-                    className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark"
-                    ellipsizeMode="tail"
-                    numberOfLines={4}
-                  >
-                    {event.detail}
-                  </Text>
-                ) : null}
-              </View>
-            ))}
+              );
+            })}
           </View>
         ) : null}
 
@@ -597,17 +602,39 @@ function formatTimelineTitle(event: ExecutionTimelineEvent) {
   return event.title;
 }
 
-function formatTimelineTime(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
+function formatTimelineDuration(
+  previousEvent: ExecutionTimelineEvent | undefined,
+  event: ExecutionTimelineEvent,
+) {
+  if (!previousEvent) {
+    return "Start";
   }
 
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const startedAt = new Date(previousEvent.createdAt).getTime();
+  const completedAt = new Date(event.createdAt).getTime();
+
+  if (
+    Number.isNaN(startedAt) ||
+    Number.isNaN(completedAt) ||
+    completedAt < startedAt
+  ) {
+    return "—";
+  }
+
+  const durationMs = completedAt - startedAt;
+
+  if (durationMs < 100) {
+    return "< 0.1s";
+  }
+
+  if (durationMs < 60_000) {
+    return `${(durationMs / 1000).toFixed(durationMs < 10_000 ? 1 : 0)}s`;
+  }
+
+  const minutes = Math.floor(durationMs / 60_000);
+  const seconds = Math.round((durationMs % 60_000) / 1000);
+
+  return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
 }
 
 function createMarkdownStyles(input: {
@@ -630,6 +657,14 @@ function createMarkdownStyles(input: {
     bullet_list: {
       marginBottom: 0,
       marginTop: 0,
+    },
+    bullet_list_content: {
+      flex: 1,
+    },
+    bullet_list_icon: {
+      color: input.text,
+      marginRight: 8,
+      width: 12,
     },
     code_block: {
       backgroundColor: input.codeBackground,
@@ -708,12 +743,22 @@ function createMarkdownStyles(input: {
     },
     list_item: {
       color: input.text,
+      flexDirection: "row",
+      justifyContent: "flex-start",
       marginBottom: 0,
       marginTop: 0,
     },
     ordered_list: {
       marginBottom: 0,
       marginTop: 0,
+    },
+    ordered_list_content: {
+      flex: 1,
+    },
+    ordered_list_icon: {
+      color: input.text,
+      marginRight: 8,
+      minWidth: 20,
     },
     paragraph: {
       color: input.text,

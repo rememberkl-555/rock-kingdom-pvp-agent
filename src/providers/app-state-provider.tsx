@@ -1,4 +1,4 @@
-import type { ToolSet } from "ai";
+import type { ModelMessage, ToolSet } from "ai";
 import type { DocumentPickerAsset } from "expo-document-picker";
 import { useSQLiteContext } from "expo-sqlite";
 import {
@@ -9,7 +9,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { AppState, Platform } from "react-native";
+import {
+  AppState,
+  Platform,
+  useColorScheme as useSystemColorScheme,
+} from "react-native";
+import { colorScheme } from "nativewind";
 
 import {
   BUILT_IN_FILE_TOOL_CONTROLS,
@@ -77,7 +82,6 @@ import {
 } from "@/lib/tools/memory-tools";
 import {
   buildSelectedFilesInlineContext,
-  buildWorkspaceSystemPrompt,
   createWorkspaceTools,
 } from "@/lib/tools/workspace-tools";
 import { createWorkspaceFileService } from "@/lib/workspace/workspace-file-service";
@@ -122,6 +126,8 @@ type AppStateContextValue = {
     runId?: string;
   }) => Promise<void>;
   clearProviderApiKey: (providerId: string) => Promise<void>;
+  clearWorkspaceFiles: () => Promise<void>;
+  deleteWorkspaceFile: (fileId: string) => Promise<void>;
   clearMcpServerCredentials: (serverId: string) => Promise<void>;
   connectOpenAIOAuth: () => Promise<void>;
   connectMcpServerOAuth: (serverId: string) => Promise<void>;
@@ -257,6 +263,7 @@ type AppStateContextValue = {
     mode: AppSettings["toolApprovalMode"],
   ) => Promise<void>;
   updateMaxToolSteps: (maxToolSteps: number) => Promise<void>;
+  updateThemeMode: (mode: AppSettings["themeMode"]) => Promise<void>;
   updateProvider: (
     providerId: string,
     input: {
@@ -295,8 +302,29 @@ const EMPTY_SETTINGS: AppSettings = {
   databaseUrl: null,
   memoryEnabled: true,
   maxToolSteps: 50,
+  themeMode: "system",
   toolApprovalMode: "ask",
 };
+
+function ThemePreferenceController({
+  mode,
+}: {
+  mode: AppSettings["themeMode"];
+}) {
+  const systemColorScheme = useSystemColorScheme();
+
+  useEffect(() => {
+    colorScheme.set(
+      Platform.OS === "web" && mode === "system"
+        ? systemColorScheme === "dark"
+          ? "dark"
+          : "light"
+        : mode,
+    );
+  }, [mode, systemColorScheme]);
+
+  return null;
+}
 
 const EMPTY_RESOLVED_CONFIG: ResolvedConfig = {
   activeProviderIds: [],
@@ -346,9 +374,8 @@ function buildCurrentDateTimeSystemPrompt() {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   return [
-    `Current local date and time: ${now.toLocaleString()}.`,
+    `Current date and time: ${now.toLocaleString()}.`,
     `Current time zone: ${timeZone || "device local time"}.`,
-    `Current ISO timestamp: ${now.toISOString()}.`,
     "Use this as the reference for relative dates such as today, tomorrow, and yesterday.",
   ].join("\n");
 }
@@ -462,6 +489,28 @@ function upsertWorkspaceFiles(
   return [...map.values()].sort((left, right) =>
     right.updatedAt.localeCompare(left.updatedAt),
   );
+}
+
+function appendContextToLatestUserMessage(
+  messages: ModelMessage[],
+  context: string,
+) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+
+    if (message.role !== "user") {
+      continue;
+    }
+
+    messages[index] = {
+      ...message,
+      content:
+        typeof message.content === "string"
+          ? [message.content, context].filter(Boolean).join("\n\n")
+          : [...message.content, { type: "text", text: context }],
+    } as ModelMessage;
+    return;
+  }
 }
 
 function resolveFileContextSource(input: {
@@ -1092,7 +1141,11 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
     setPendingToolApprovals((current) => [...current, approval]);
 
     return await new Promise<ToolApprovalDecision>((resolve) => {
-      runRegistryRef.current.registerPendingApproval(run.id, approval.id, resolve);
+      runRegistryRef.current.registerPendingApproval(
+        run.id,
+        approval.id,
+        resolve,
+      );
     });
   }
 
@@ -1418,6 +1471,84 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
     setSnapshot((current) => ({
       ...current,
       workspaceFiles,
+    }));
+  }
+
+  async function clearWorkspaceFiles() {
+    await workspaceServiceRef.current.clearAll();
+
+    const conversations = await Promise.all(
+      snapshotRef.current.conversations.map(async (conversation) => {
+        if (conversation.selectedFileIds.length === 0) {
+          return conversation;
+        }
+
+        await repositoriesRef.current.conversationRepository.updateMetadata(
+          conversation.id,
+          { selectedFileIds: [] },
+        );
+
+        return { ...conversation, selectedFileIds: [] };
+      }),
+    );
+
+    setSnapshot((current) => ({
+      ...current,
+      conversations,
+      currentConversation: current.currentConversation
+        ? { ...current.currentConversation, selectedFileIds: [] }
+        : null,
+      currentSelectedFileIds: [],
+      workspaceFiles: [],
+    }));
+  }
+
+  async function deleteWorkspaceFile(fileId: string) {
+    const file = await repositoriesRef.current.workspaceRepository.getById(
+      fileId,
+    );
+
+    if (!file || file.sourceKind !== "imported") {
+      return;
+    }
+
+    await workspaceServiceRef.current.deleteFile(file);
+
+    const conversations = await Promise.all(
+      snapshotRef.current.conversations.map(async (conversation) => {
+        if (!conversation.selectedFileIds.includes(fileId)) {
+          return conversation;
+        }
+
+        const selectedFileIds = conversation.selectedFileIds.filter(
+          (id) => id !== fileId,
+        );
+        await repositoriesRef.current.conversationRepository.updateMetadata(
+          conversation.id,
+          { selectedFileIds },
+        );
+
+        return { ...conversation, selectedFileIds };
+      }),
+    );
+
+    setSnapshot((current) => ({
+      ...current,
+      conversations,
+      currentConversation: current.currentConversation
+        ? {
+            ...current.currentConversation,
+            selectedFileIds: current.currentConversation.selectedFileIds.filter(
+              (id) => id !== fileId,
+            ),
+          }
+        : null,
+      currentSelectedFileIds: current.currentSelectedFileIds.filter(
+        (id) => id !== fileId,
+      ),
+      workspaceFiles: current.workspaceFiles.filter(
+        (workspaceFile) => workspaceFile.id !== fileId,
+      ),
     }));
   }
 
@@ -1772,6 +1903,11 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
     await repositoriesRef.current.configRepository.setMaxToolSteps(
       maxToolSteps,
     );
+    await hydrate();
+  }
+
+  async function updateThemeMode(mode: AppSettings["themeMode"]) {
+    await repositoriesRef.current.configRepository.setThemeMode(mode);
     await hydrate();
   }
 
@@ -2290,7 +2426,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
     const currentRunWorkspaceFiles = run.selectedFileIds
       .map((fileId) => workspaceFilesById.get(fileId))
       .filter((file): file is WorkspaceFile => file !== undefined);
-    const { binaryFiles, imageFiles, textFiles } = partitionSelectedFiles(
+    const { binaryFiles, imageFiles } = partitionSelectedFiles(
       currentRunWorkspaceFiles,
     );
 
@@ -2357,7 +2493,8 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
       appliedSkillIdSet.has(skill.id),
     );
     const useInlineFileContext =
-      run.fileContextSource === "workspace" && textFiles.length > 0;
+      run.fileContextSource === "workspace" &&
+      currentRunWorkspaceFiles.length > 0;
     const externalFolderSession =
       run.fileContextSource === "external-folder"
         ? run.externalFolderSession
@@ -2365,7 +2502,6 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
     const selectedWorkspaceToolFileIds = currentRunWorkspaceFiles.map(
       (file) => file.id,
     );
-    const selectedTextFileIds = textFiles.map((file) => file.id);
 
     const pushTimelineEvent = (event: ExecutionTimelineEvent) => {
       executionTimeline.push(event);
@@ -2751,22 +2887,17 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
           ? buildExternalFolderSystemPrompt(
               externalFolderSession as ExternalFolderSession,
             )
-          : [
-              builtInRuntimeTools
-                ? await buildWorkspaceSystemPrompt({
-                    repository: repositories.workspaceRepository,
-                    selectedFileIds: selectedWorkspaceToolFileIds,
-                  })
-                : undefined,
-              useInlineFileContext
-                ? await buildSelectedFilesInlineContext({
-                    repository: repositories.workspaceRepository,
-                    selectedFileIds: selectedTextFileIds,
-                  })
-                : undefined,
-            ]
-              .filter((part): part is string => Boolean(part?.trim()))
-              .join("\n\n") || undefined;
+          : undefined;
+      const selectedFilesContext = useInlineFileContext
+        ? await buildSelectedFilesInlineContext({
+            repository: repositories.workspaceRepository,
+            selectedFileIds: selectedWorkspaceToolFileIds,
+          })
+        : undefined;
+
+      if (selectedFilesContext) {
+        appendContextToLatestUserMessage(runtimeMessages, selectedFilesContext);
+      }
       const skillsRuntimeSystem = buildSkillsSystemPrompt({
         builtInToolSettings: snapshotRef.current.settings.builtInToolSettings,
         mcpServers: snapshotRef.current.mcpServers,
@@ -2778,7 +2909,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
           })
         : undefined;
       const toolLoopRuntimeSystem = runtimeTools
-          ? [
+        ? [
             "Complete the user's requested task before ending your response.",
             "Before the first tool call, briefly tell the user what you are about to do.",
             "An inspection or listing tool is only an intermediate step when the user requested a change.",
@@ -3513,6 +3644,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         cancelRun,
         clearMcpServerCredentials,
         clearProviderApiKey,
+        clearWorkspaceFiles,
         clearConversationFolder,
         connectMcpServerOAuth,
         connectOpenAIOAuth,
@@ -3540,6 +3672,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         deleteMemory,
         deleteModelPreset,
         deleteSkill,
+        deleteWorkspaceFile,
         disconnectOpenAIOAuth,
         error,
         hydrating,
@@ -3576,11 +3709,13 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         updateMemoryEnabled,
         updateSkill,
         updateToolApprovalMode,
+        updateThemeMode,
         updateMaxToolSteps,
         updateProvider,
         workspaceFiles: snapshot.workspaceFiles,
       }}
     >
+      <ThemePreferenceController mode={snapshot.settings.themeMode} />
       {children}
     </AppStateContext.Provider>
   );
@@ -3630,6 +3765,7 @@ export function useConfig() {
     deleteMemory: context.deleteMemory,
     deleteModelPreset: context.deleteModelPreset,
     deleteSkill: context.deleteSkill,
+    deleteWorkspaceFile: context.deleteWorkspaceFile,
     disconnectOpenAIOAuth: context.disconnectOpenAIOAuth,
     currentModelSupportsImageGeneration:
       context.resolvedConfig.currentModelSupportsImageGeneration,
@@ -3649,6 +3785,7 @@ export function useConfig() {
     refreshWorkspaceFiles: context.refreshWorkspaceFiles,
     testMcpServer: context.testMcpServer,
     toolApprovalMode: context.settings.toolApprovalMode,
+    themeMode: context.settings.themeMode,
     toolSettings: context.settings.builtInToolSettings,
     updateDatabaseSettings: context.updateDatabaseSettings,
     updateMcpServer: context.updateMcpServer,
@@ -3657,6 +3794,7 @@ export function useConfig() {
     updateMemoryEnabled: context.updateMemoryEnabled,
     updateSkill: context.updateSkill,
     updateToolApprovalMode: context.updateToolApprovalMode,
+    updateThemeMode: context.updateThemeMode,
     updateMaxToolSteps: context.updateMaxToolSteps,
     maxToolSteps: context.settings.maxToolSteps,
     updateProvider: context.updateProvider,
@@ -3683,6 +3821,8 @@ export function useChat() {
     createConversation: context.createConversation,
     createWorkspaceFile: context.createWorkspaceFile,
     clearConversationFolder: context.clearConversationFolder,
+    clearWorkspaceFiles: context.clearWorkspaceFiles,
+    deleteWorkspaceFile: context.deleteWorkspaceFile,
     currentSelectedFileIds: context.currentSelectedFileIds,
     importFiles: context.importFiles,
     messages: context.messages,

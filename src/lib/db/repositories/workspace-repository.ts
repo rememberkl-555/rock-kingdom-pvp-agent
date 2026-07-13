@@ -55,6 +55,12 @@ export function createWorkspaceRepository(db: AppDatabase): WorkspaceRepository 
     async list() {
       return db.select().from(workspaceFiles).orderBy(desc(workspaceFiles.updatedAt));
     },
+    async deleteAll() {
+      await db.delete(workspaceFiles);
+    },
+    async delete(id) {
+      await db.delete(workspaceFiles).where(eq(workspaceFiles.id, id));
+    },
     async updateMetadata(id, input) {
       const current = (
         await db

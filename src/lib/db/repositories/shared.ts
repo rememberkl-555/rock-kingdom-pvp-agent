@@ -3,7 +3,12 @@ import type { SQLiteDatabase } from "expo-sqlite";
 
 import { normalizeBuiltInToolSettings } from "@/lib/config/built-in-tools";
 import { appSettings, schema } from "@/lib/db/schema";
-import type { AppSettings, DatabaseMode, ToolApprovalMode } from "@/types/app-state";
+import type {
+  AppSettings,
+  DatabaseMode,
+  ThemeMode,
+  ToolApprovalMode,
+} from "@/types/app-state";
 
 type AppSettingRow = typeof appSettings.$inferSelect;
 
@@ -18,6 +23,7 @@ export function createDrizzleDb(sqliteDb: SQLiteDatabase) {
 export function buildSettings(rows: AppSettingRow[]): AppSettings {
   const settingsMap = new Map(rows.map((row) => [row.key, row.value]));
   const parsedMaxToolSteps = Number(settingsMap.get("max_tool_steps"));
+  const storedThemeMode = settingsMap.get("theme_mode");
 
   return {
     activeConversationId: settingsMap.get("active_conversation_id") ?? null,
@@ -47,6 +53,11 @@ export function buildSettings(rows: AppSettingRow[]): AppSettings {
       Number.isInteger(parsedMaxToolSteps) && parsedMaxToolSteps >= 1
         ? Math.min(parsedMaxToolSteps, 100)
         : 50,
+    themeMode: (["system", "light", "dark"] as const).includes(
+      storedThemeMode as ThemeMode,
+    )
+      ? (storedThemeMode as ThemeMode)
+      : "system",
     toolApprovalMode:
       (settingsMap.get("tool_approval_mode") as ToolApprovalMode | null) ?? "ask",
   };

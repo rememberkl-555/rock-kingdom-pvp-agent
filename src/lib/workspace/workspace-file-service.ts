@@ -124,6 +124,24 @@ export function createWorkspaceFileService(repository: WorkspaceRepository) {
 
   return {
     ensureWorkspaceDirectory,
+    async clearAll() {
+      const directory = getWorkspaceDirectory();
+
+      if (directory.exists) {
+        directory.delete();
+      }
+
+      await repository.deleteAll();
+    },
+    async deleteFile(workspaceFile: WorkspaceFile) {
+      const file = resolveWorkspaceFile(workspaceFile.relativePath);
+
+      if (file.exists) {
+        file.delete();
+      }
+
+      await repository.delete(workspaceFile.id);
+    },
     async importDocument(asset: DocumentPickerAsset) {
       const id = Crypto.randomUUID();
       const displayName = sanitizeFileName(asset.name || "imported-file");

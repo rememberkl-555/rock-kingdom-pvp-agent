@@ -22,6 +22,7 @@ import type {
   SkillConfig,
   StoredMessage,
   ToolApprovalMode,
+  ThemeMode,
   WorkspaceFile,
   WorkspaceFileSourceKind,
 } from "@/types/app-state";
@@ -126,6 +127,8 @@ export interface WorkspaceRepository {
   getById(id: string): Promise<WorkspaceFile | null>;
   getByIds(ids: string[]): Promise<WorkspaceFile[]>;
   list(): Promise<WorkspaceFile[]>;
+  deleteAll(): Promise<void>;
+  delete(id: string): Promise<void>;
   updateMetadata(
     id: string,
     input: {
@@ -264,6 +267,7 @@ export interface ConfigRepository {
   }): Promise<void>;
   setBuiltInToolSettings(input: Partial<BuiltInToolSettings>): Promise<void>;
   setMemoryEnabled(enabled: boolean): Promise<void>;
+  setThemeMode(mode: ThemeMode): Promise<void>;
   setToolApprovalMode(mode: ToolApprovalMode): Promise<void>;
   setMaxToolSteps(maxToolSteps: number): Promise<void>;
   setDefaultModelPreset(modelPresetId: string): Promise<void>;

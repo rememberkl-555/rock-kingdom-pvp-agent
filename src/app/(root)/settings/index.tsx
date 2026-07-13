@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { useUpdate } from "@/providers/check-for-updates";
 import type { DatabaseMode, ModelRef } from "@/types/app-state";
 
-type DrawerKey = "current-model" | "db" | null;
+type DrawerKey = "current-model" | "db" | "theme" | null;
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -43,8 +43,10 @@ export default function SettingsScreen() {
     selectModel,
     mcpServers,
     skills,
+    themeMode,
     toolSettings,
     updateDatabaseSettings,
+    updateThemeMode,
     providers,
   } = useConfig();
   const { data: liveModels } = useLiveModelCatalog();
@@ -186,6 +188,53 @@ export default function SettingsScreen() {
                 Manage providers
               </Button>
             </DrawerFooter>
+          </DrawerContent>
+        </Drawer>
+        <Separator />
+        <Drawer
+          onOpenChange={(open) => {
+            setOpenDrawer(open ? "theme" : null);
+          }}
+          open={openDrawer === "theme"}
+        >
+          <DrawerTrigger asChild>
+            <SettingsLinkRow
+              label="Theme"
+              value={
+                themeMode === "system"
+                  ? "System"
+                  : themeMode === "dark"
+                    ? "Dark"
+                    : "Light"
+              }
+            />
+          </DrawerTrigger>
+          <DrawerContent showCloseButton>
+            <DrawerHeader>
+              <DrawerTitle>Theme</DrawerTitle>
+            </DrawerHeader>
+            <DrawerBody contentContainerClassName="gap-sp-2">
+              {(
+                [
+                  ["system", "System", "Follow your device appearance"],
+                  ["light", "Light", "Always use the light theme"],
+                  ["dark", "Dark", "Always use the dark theme"],
+                ] as const
+              ).map(([value, label, subtitle]) => (
+                <DrawerOptionRow
+                  key={value}
+                  label={label}
+                  onPress={() => {
+                    runAction(`theme:${value}`, async () => {
+                      await updateThemeMode(value);
+                      setOpenDrawer(null);
+                    }).catch(console.error);
+                  }}
+                  selected={themeMode === value}
+                  subtitle={subtitle}
+                />
+              ))}
+            </DrawerBody>
           </DrawerContent>
         </Drawer>
         <Separator />

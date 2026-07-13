@@ -12,10 +12,12 @@ import {
   Send,
   Settings,
   StopCircle,
+  Trash2,
+  Upload,
   X,
 } from "lucide-react-native";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Platform, Pressable, Text, View } from "react-native";
+import { Alert, Platform, Pressable, Text, View } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 
 import { Container } from "@/components/shared/container";
@@ -130,6 +132,8 @@ export default function Screen() {
     approvePendingToolApproval,
     denyPendingToolApproval,
     clearConversationFolder,
+    clearWorkspaceFiles,
+    deleteWorkspaceFile,
     currentConversationRunStatus,
     currentExternalFolderSession,
     currentSelectedFileIds,
@@ -269,6 +273,8 @@ export default function Screen() {
             onStop={stopSending}
             pickConversationFolder={pickConversationFolder}
             clearConversationFolder={clearConversationFolder}
+            clearWorkspaceFiles={clearWorkspaceFiles}
+            deleteWorkspaceFile={deleteWorkspaceFile}
             refreshWorkspaceFiles={refreshWorkspaceFiles}
             selectModel={selectModel}
             selectedFileIds={currentSelectedFileIds}
@@ -535,6 +541,8 @@ function ChatInput({
   onStop,
   pickConversationFolder,
   clearConversationFolder,
+  clearWorkspaceFiles,
+  deleteWorkspaceFile,
   refreshWorkspaceFiles,
   selectModel,
   selectedFileIds,
@@ -556,6 +564,8 @@ function ChatInput({
   }>;
   canSend: boolean;
   clearConversationFolder: () => Promise<void>;
+  clearWorkspaceFiles: () => Promise<void>;
+  deleteWorkspaceFile: (fileId: string) => Promise<void>;
   createWorkspaceFile: (input: {
     content: string;
     name: string;
@@ -602,9 +612,10 @@ function ChatInput({
   const [newFileName, setNewFileName] = useState("");
   const [newFileContent, setNewFileContent] = useState("");
   const [busyAction, setBusyAction] = useState<
-    null | "create" | "import" | "folder"
+    null | "clear" | "create" | "import" | "folder"
   >(null);
   const [folderDrawerOpen, setFolderDrawerOpen] = useState(false);
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
   const [folderNotice, setFolderNotice] = useState<string | null>(null);
   const [approvalModeDrawerOpen, setApprovalModeDrawerOpen] = useState(false);
   const [localWorkspaceFiles, setLocalWorkspaceFiles] = useState<
@@ -650,6 +661,9 @@ function ChatInput({
       (left, right) =>
         selectedFileIds.indexOf(left.id) - selectedFileIds.indexOf(right.id),
     );
+  const uploadedFiles = mergedWorkspaceFiles.filter(
+    (file) => file.sourceKind === "imported",
+  );
   const selectedAttachmentBuckets = useMemo(
     () => partitionSelectedFiles(selectedFiles),
     [selectedFiles],
@@ -660,7 +674,6 @@ function ChatInput({
     selectedSkillIds.includes(skill.id),
   );
 
-  const canAttachFiles = supportsTools || supportsImageInput;
   const canAttachSelectedFiles =
     !(selectedAttachmentBuckets.imageFiles.length > 0 && !supportsImageInput) &&
     !(selectedAttachmentBuckets.binaryFiles.length > 0 && !supportsTools);
@@ -784,7 +797,7 @@ function ChatInput({
   };
 
   const handleImportFiles = async () => {
-    if (!canAttachFiles || busyAction) {
+    if (busyAction) {
       return;
     }
 
@@ -854,6 +867,67 @@ function ChatInput({
     }
   };
 
+  const handleClearWorkspaceFiles = () => {
+    if (mergedWorkspaceFiles.length === 0 || busyAction || loading) {
+      return;
+    }
+
+    Alert.alert(
+      "Clear workspace files?",
+      "This permanently deletes all uploaded, created, and generated workspace files.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear all",
+          style: "destructive",
+          onPress: () => {
+            setBusyAction("clear");
+            clearWorkspaceFiles()
+              .then(() => {
+                setLocalWorkspaceFiles([]);
+                setFilesDrawerOpen(false);
+              })
+              .catch(console.error)
+              .finally(() => {
+                setBusyAction(null);
+              });
+          },
+        },
+      ],
+    );
+  };
+
+  const handleDeleteUploadedFile = (file: WorkspaceFile) => {
+    if (deletingFileId || loading) {
+      return;
+    }
+
+    Alert.alert(
+      "Delete uploaded file?",
+      `${file.displayName} will be permanently deleted.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            setDeletingFileId(file.id);
+            deleteWorkspaceFile(file.id)
+              .then(() => {
+                setLocalWorkspaceFiles((current) =>
+                  current.filter((item) => item.id !== file.id),
+                );
+              })
+              .catch(console.error)
+              .finally(() => {
+                setDeletingFileId(null);
+              });
+          },
+        },
+      ],
+    );
+  };
+
   const sendDisabled =
     !loading &&
     ((!prompt.trim() && selectedFileIds.length === 0) ||
@@ -867,41 +941,13 @@ function ChatInput({
       [
         {
           id: "select-file",
-          icon: <Paperclip color={theme.text} size={16} />,
+          icon: <FolderOpen color={theme.text} size={16} />,
           label: "Select file",
           onPress: () => {
             clearTriggerText();
-            if (!canAttachFiles) {
-              onOpenSettings();
-              return;
-            }
-
-            handleImportFiles().catch(console.error);
-          },
-          subtitle: canAttachFiles
-            ? supportsImageInput && !supportsTools
-              ? "Attach images with this model"
-              : "Import and attach a file"
-            : "Choose an image- or tool-capable model first",
-          visible: true,
-        },
-        {
-          id: "list-files",
-          icon: <FolderOpen color={theme.text} size={16} />,
-          label: "List files",
-          onPress: () => {
-            clearTriggerText();
-
-            if (!supportsTools) {
-              onOpenSettings();
-              return;
-            }
-
             setFilesDrawerOpen(true);
           },
-          subtitle: supportsTools
-            ? "Browse workspace files"
-            : "Choose a tool-capable model first",
+          subtitle: "Choose an uploaded file or upload a new one",
           visible: true,
         },
         {
@@ -975,7 +1021,6 @@ function ChatInput({
         .map(({ visible: _visible, ...item }) => item),
     [
       activeFolderLabel,
-      canAttachFiles,
       clearConversationFolder,
       currentExternalFolderSession,
       onOpenSettings,
@@ -1249,16 +1294,16 @@ function ChatInput({
       <Drawer onOpenChange={setFilesDrawerOpen} open={filesDrawerOpen}>
         <DrawerContent showCloseButton showHandle size={520}>
           <DrawerHeader>
-            <DrawerTitle>Workspace files</DrawerTitle>
+            <DrawerTitle>Select file</DrawerTitle>
             <DrawerDescription>
-              {mergedWorkspaceFiles.length} file
-              {mergedWorkspaceFiles.length === 1 ? "" : "s"} available
+              {uploadedFiles.length} uploaded file
+              {uploadedFiles.length === 1 ? "" : "s"} available
             </DrawerDescription>
           </DrawerHeader>
 
           <DrawerBody contentContainerClassName="gap-sp-2 pb-sp-4">
-            {mergedWorkspaceFiles.length > 0 ? (
-              mergedWorkspaceFiles.map((file) => {
+            {uploadedFiles.length > 0 ? (
+              uploadedFiles.map((file) => {
                 const selected = selectedFileIds.includes(file.id);
 
                 return (
@@ -1271,6 +1316,10 @@ function ChatInput({
                           : [...selectedFileIds, file.id],
                       ).catch(console.error);
                     }}
+                    deleting={deletingFileId === file.id}
+                    onDelete={() => {
+                      handleDeleteUploadedFile(file);
+                    }}
                     selected={selected}
                     subtitle={file.mimeType ?? "Unknown type"}
                     title={file.displayName}
@@ -1279,32 +1328,29 @@ function ChatInput({
               })
             ) : (
               <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
-                No workspace files yet. Import one or create a new text file
-                first.
+                No uploaded files yet. Upload one below to attach it.
               </Text>
             )}
           </DrawerBody>
           <DrawerFooter>
-            <View className="flex-row gap-sp-2">
+            <View className="gap-sp-2">
               <Button
-                className="flex-1"
-                leftIcon={<Paperclip color={theme.text} size={16} />}
+                leftIcon={<Upload color={theme.text} size={16} />}
                 loading={busyAction === "import"}
                 onPress={handleImportFiles}
                 variant="secondary"
               >
-                Import
+                Upload new file
               </Button>
               <Button
-                className="flex-1"
-                leftIcon={<FilePlus2 color={theme.text} size={16} />}
-                onPress={() => {
-                  setFilesDrawerOpen(false);
-                  setNewFileDrawerOpen(true);
-                }}
-                variant="outline"
+                disabled={mergedWorkspaceFiles.length === 0 || loading}
+                leftIcon={<Trash2 color={theme.destructive} size={16} />}
+                loading={busyAction === "clear"}
+                onPress={handleClearWorkspaceFiles}
+                textClassName="text-destructive dark:text-destructive-dark"
+                variant="ghost"
               >
-                New file
+                Clear all workspace files
               </Button>
             </View>
           </DrawerFooter>
@@ -1564,11 +1610,15 @@ function ComposerMenuRow({
 }
 
 function DrawerSelectRow({
+  deleting = false,
+  onDelete,
   onPress,
   selected,
   subtitle,
   title,
 }: {
+  deleting?: boolean;
+  onDelete?: () => void;
   onPress: () => void;
   selected: boolean;
   subtitle?: string;
@@ -1577,28 +1627,46 @@ function DrawerSelectRow({
   const theme = useTheme();
 
   return (
-    <Pressable
-      accessibilityRole="button"
+    <View
       className={cn(
         "flex-row items-center gap-sp-3 rounded-ui border px-sp-4 py-sp-3",
         selected
           ? "border-foreground bg-secondary dark:border-foreground-dark dark:bg-secondary-dark"
           : "border-border bg-background dark:border-border-dark dark:bg-background-dark",
       )}
-      onPress={onPress}
-      style={({ pressed }) => (pressed ? { opacity: 0.85 } : null)}
     >
-      <View className="min-w-0 flex-1 gap-1">
-        <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
-          {title}
-        </Text>
-        {subtitle ? (
-          <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
-            {subtitle}
+      <Pressable
+        accessibilityRole="button"
+        className="min-w-0 flex-1 flex-row items-center gap-sp-3"
+        onPress={onPress}
+        style={({ pressed }) => (pressed ? { opacity: 0.85 } : null)}
+      >
+        <View className="min-w-0 flex-1 gap-1">
+          <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
+            {title}
           </Text>
-        ) : null}
-      </View>
-      {selected ? <Check color={theme.text} size={18} /> : null}
-    </Pressable>
+          {subtitle ? (
+            <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+        {selected ? <Check color={theme.text} size={18} /> : null}
+      </Pressable>
+      {onDelete ? (
+        <Pressable
+          accessibilityLabel={`Delete ${title}`}
+          accessibilityRole="button"
+          disabled={deleting}
+          hitSlop={8}
+          onPress={onDelete}
+          style={({ pressed }) => ({
+            opacity: deleting ? 0.45 : pressed ? 0.7 : 1,
+          })}
+        >
+          <Trash2 color={theme.destructive} size={18} />
+        </Pressable>
+      ) : null}
+    </View>
   );
 }

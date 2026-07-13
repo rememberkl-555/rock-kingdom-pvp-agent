@@ -162,6 +162,9 @@ export function createConfigRepository(db: AppDatabase): ConfigRepository {
     async setMemoryEnabled(enabled) {
       await this.setSetting("memory_enabled", enabled ? "true" : "false");
     },
+    async setThemeMode(mode) {
+      await this.setSetting("theme_mode", mode);
+    },
     async setToolApprovalMode(mode) {
       await this.setSetting("tool_approval_mode", mode);
     },
