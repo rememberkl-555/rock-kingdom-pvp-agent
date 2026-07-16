@@ -56,8 +56,10 @@ export const Input = forwardRef<TextInput, InputProps>(
           setFocused(true);
           onFocus?.(event);
         }}
+        cursorColor={theme.text}
         placeholderTextColor={theme.textSecondary}
-        selectionColor={theme.text}
+        selectionColor={theme.backgroundSelected}
+        selectionHandleColor={theme.text}
         {...props}
       />
     );
