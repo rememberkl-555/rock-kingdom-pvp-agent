@@ -45,7 +45,7 @@ if (
   };
 }
 
-import { getMcpOAuthAccessToken } from "@/lib/mcp/oauth";
+import { createMcpTransportOAuthProvider } from "@/lib/mcp/oauth";
 import { secureSecretStore } from "@/lib/secrets";
 import { createRecord, summarizeValue } from "@/lib/tools/built-in/shared";
 import type { McpServerConfig, ToolExecutionRecord } from "@/types/app-state";
@@ -91,15 +91,48 @@ async function buildMcpHeaders(server: McpServerConfig) {
       ? await secureSecretStore.getMcpHeaderValues(server.id)
       : {};
 
-  if (server.authMode === "oauth") {
-    const accessToken = await getMcpOAuthAccessToken(server);
+  return headers;
+}
 
-    if (accessToken) {
-      headers.Authorization = `Bearer ${accessToken}`;
+function alternateTransport(
+  transport: McpServerConfig["transport"],
+): McpServerConfig["transport"] {
+  return transport === "http" ? "sse" : "http";
+}
+
+async function connectMcpClient(
+  server: McpServerConfig,
+  headers: Record<string, string>,
+) {
+  const transports = [server.transport, alternateTransport(server.transport)];
+  const failures: string[] = [];
+
+  for (const transportType of transports) {
+    try {
+      return await createRuntimeMCPClient({
+        clientName: "mobile-agent",
+        maxRetries: 2,
+        transport: {
+          type: transportType,
+          url: server.url,
+          headers,
+          redirect: "follow",
+          authProvider:
+            server.authMode === "oauth"
+              ? createMcpTransportOAuthProvider(server)
+              : undefined,
+        },
+      });
+    } catch (error) {
+      failures.push(
+        `${transportType.toUpperCase()}: ${getErrorMessage(error)}`,
+      );
     }
   }
 
-  return headers;
+  throw new Error(
+    `Could not connect using Streamable HTTP or SSE. ${failures.join(" | ")}`,
+  );
 }
 
 function sanitizeJsonSchema(
@@ -206,14 +239,7 @@ export async function createMcpRuntimeTools(params: {
   for (const server of params.servers.filter((item) => item.enabled)) {
     try {
       const headers = await buildMcpHeaders(server);
-      const client = await createRuntimeMCPClient({
-        clientName: "mobile-agent",
-        transport: {
-          type: server.transport,
-          url: server.url,
-          headers,
-        },
-      });
+      const client = await connectMcpClient(server, headers);
 
       clients.push(client);
       const rawDefinitions = await client.listTools();
@@ -349,14 +375,7 @@ export async function testMcpServerConnection(server: McpServerConfig) {
 
   try {
     const headers = await buildMcpHeaders(server);
-    client = await createRuntimeMCPClient({
-      clientName: "mobile-agent",
-      transport: {
-        type: server.transport,
-        url: server.url,
-        headers,
-      },
-    });
+    client = await connectMcpClient(server, headers);
 
     const tools = await client.listTools();
 

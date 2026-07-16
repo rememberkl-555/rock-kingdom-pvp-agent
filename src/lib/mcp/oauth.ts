@@ -9,18 +9,19 @@ import {
   AuthRequest,
   CodeChallengeMethod,
   exchangeCodeAsync,
-  makeRedirectUri,
   refreshAsync,
   ResponseType,
   type DiscoveryDocument,
 } from "expo-auth-session";
 import * as Crypto from "expo-crypto";
-import * as WebBrowser from "expo-web-browser";
 import "react-native-get-random-values";
 
 import { secureSecretStore, type McpOAuthSession } from "@/lib/secrets";
+import {
+  MCP_OAUTH_REDIRECT_URI,
+  openMcpLoopbackAuthorization,
+} from "@/lib/mcp/loopback-oauth";
 import type { McpServerConfig } from "@/types/app-state";
-import { Platform } from "react-native";
 
 const REFRESH_SKEW_MS = 60_000;
 const MCP_PROTOCOL_VERSION = "2025-11-25";
@@ -39,27 +40,9 @@ type ProtectedResourceMetadata = {
   scopes_supported?: string[];
 };
 
-let cryptoInstalled = false;
-
-async function ensureCryptoInstalled() {
-  if (Platform.OS === "web") return;
-
-  if (!cryptoInstalled) {
-    const { install } = await import("react-native-quick-crypto");
-    install();
-    cryptoInstalled = true;
-  }
-}
-
 async function getAuth() {
   const { auth } = await import("@ai-sdk/mcp");
   return auth;
-}
-
-function createMcpOAuthCanceledError(message = "MCP OAuth was canceled.") {
-  const error = new Error(message);
-  error.name = MCP_OAUTH_CANCELED_ERROR_NAME;
-  return error;
 }
 
 export function isMcpOAuthCanceledError(error: unknown) {
@@ -152,6 +135,21 @@ function isIssuerMismatchError(error: unknown) {
   );
 }
 
+function isOAuthRegistrationRateLimit(error: unknown) {
+  return (
+    error instanceof Error &&
+    /(?:status:\s*429|oauth\/register.*429|429.*oauth\/register)/i.test(
+      `${error.message}\n${error.stack ?? ""}`,
+    )
+  );
+}
+
+function oauthRegistrationRateLimitError() {
+  return new Error(
+    "The MCP authorization server is temporarily rate-limiting new OAuth client registrations (HTTP 429). Wait a few minutes before reconnecting, or add an existing client ID in Advanced OAuth overrides.",
+  );
+}
+
 function shouldRefreshSession(session: McpOAuthSession | null) {
   return Boolean(
     session?.tokens?.refresh_token &&
@@ -167,10 +165,7 @@ function resolveSessionExpiry(tokens: OAuthTokens) {
 }
 
 function getDiscoveryOAuthRedirectUri() {
-  return makeRedirectUri({
-    scheme: "mobile-agent",
-    path: "mcp/oauth/callback",
-  });
+  return MCP_OAUTH_REDIRECT_URI;
 }
 
 function normalizeUrl(value: string | URL) {
@@ -533,35 +528,13 @@ async function connectCompatibleDiscoveredMcpOAuth(server: McpServerConfig) {
 
   await request.makeAuthUrlAsync(discovery);
 
-  console.log("Authorization Endpoint:", authEndpoint.toString());
-  console.log("Resource:", resource);
-  console.log("Generated URL:", request.url);
-
-  console.log({
-    verifier: request.codeVerifier,
-    challenge: request.codeChallenge,
-  });
-
-  const result = await request.promptAsync(discovery);
-
-  if (result.type === "error") {
-    throw new Error(
-      result.error?.description ||
-        result.params.error_description ||
-        result.params.error ||
-        "MCP OAuth authorization failed.",
-    );
-  }
-
-  if (result.type !== "success") {
-    throw createMcpOAuthCanceledError();
-  }
-
-  const code = result.params.code;
-
-  if (!code) {
-    throw new Error("MCP OAuth did not return an authorization code.");
-  }
+  const authorizationUrl = request.url;
+  if (!authorizationUrl)
+    throw new Error("MCP OAuth authorization URL is missing.");
+  const { code } = await openMcpLoopbackAuthorization(
+    authorizationUrl,
+    request.state,
+  );
 
   const tokenResponse = await exchangeCodeAsync(
     {
@@ -599,6 +572,7 @@ async function connectCompatibleDiscoveredMcpOAuth(server: McpServerConfig) {
       ? Date.now() + tokenResponse.expiresIn * 1000
       : null,
     flowType: "compat",
+    redirectUri,
     resourceUrl: resource,
     state: null,
     tokens: {
@@ -738,42 +712,18 @@ function buildDiscoveryOAuthProvider(
         );
       }
 
-      const result = await WebBrowser.openAuthSessionAsync(
+      const expectedState = authorizationUrl.searchParams.get("state");
+      if (!expectedState) throw new Error("MCP OAuth state is missing.");
+      const { code, state } = await openMcpLoopbackAuthorization(
         authorizationUrl.href,
-        redirectUrl,
+        expectedState,
       );
-
-      if (result.type !== "success") {
-        throw createMcpOAuthCanceledError();
-      }
-
-      const callbackUrl = new URL(result.url);
-      const code = callbackUrl.searchParams.get("code");
-      const error = callbackUrl.searchParams.get("error");
-      const errorDescription =
-        callbackUrl.searchParams.get("error_description");
-
-      if (!code) {
-        if (error) {
-          if (error === "access_denied") {
-            throw createMcpOAuthCanceledError(
-              errorDescription || "MCP OAuth was canceled.",
-            );
-          }
-
-          throw new Error(
-            errorDescription ? `${error}: ${errorDescription}` : error,
-          );
-        }
-
-        throw new Error("MCP OAuth did not return an authorization code.");
-      }
 
       await (
         await getAuth()
       )(provider, {
         authorizationCode: code,
-        callbackState: callbackUrl.searchParams.get("state") ?? undefined,
+        callbackState: state,
         scope,
         serverUrl: server.url,
       });
@@ -839,6 +789,7 @@ function buildDiscoveryOAuthProvider(
       await updateSession((current) => ({
         ...(current ?? {}),
         clientInformation,
+        redirectUri: redirectUrl,
       }));
     },
     async authorizationServerInformation() {
@@ -877,6 +828,18 @@ function buildDiscoveryOAuthProvider(
   return provider;
 }
 
+/**
+ * Supplies OAuth to the MCP transport so it can respond to protocol-level
+ * authorization challenges instead of relying on a bearer token captured
+ * before the connection starts.
+ *
+ * Runtime connections stay non-interactive. If consent is required again, the
+ * user reconnects from MCP settings rather than seeing a browser mid-agent-run.
+ */
+export function createMcpTransportOAuthProvider(server: McpServerConfig) {
+  return buildDiscoveryOAuthProvider(server, { interactive: false });
+}
+
 async function connectDiscoveredMcpOAuth(server: McpServerConfig) {
   try {
     await (
@@ -894,6 +857,10 @@ async function connectDiscoveredMcpOAuth(server: McpServerConfig) {
       });
     }
   } catch (error) {
+    if (isOAuthRegistrationRateLimit(error)) {
+      throw oauthRegistrationRateLimitError();
+    }
+
     if (isIssuerMismatchError(error)) {
       await connectCompatibleDiscoveredMcpOAuth(server);
       return;
@@ -967,17 +934,11 @@ async function connectManualMcpOAuth(server: McpServerConfig) {
     authorizationEndpoint,
     tokenEndpoint,
   };
-  const result = await request.promptAsync(discovery);
-
-  if (result.type !== "success") {
-    throw createMcpOAuthCanceledError();
-  }
-
-  const code = result.params.code;
-
-  if (!code) {
-    throw new Error("MCP OAuth did not return an authorization code.");
-  }
+  const authorizationUrl = await request.makeAuthUrlAsync(discovery);
+  const { code } = await openMcpLoopbackAuthorization(
+    authorizationUrl,
+    request.state,
+  );
 
   const tokenResponse = await exchangeCodeAsync(
     {
@@ -1006,6 +967,7 @@ async function connectManualMcpOAuth(server: McpServerConfig) {
     await secureSecretStore.setMcpOAuthSession(server.id, {
       ...session,
       flowType: "manual",
+      redirectUri,
     });
   }
 }
@@ -1052,15 +1014,29 @@ async function refreshManualMcpAccessToken(server: McpServerConfig) {
 }
 
 export function getMcpOAuthRedirectUri() {
-  return makeRedirectUri({
-    scheme: "mobile-agent",
-    path: "mcp/oauth/callback",
-  });
+  return MCP_OAUTH_REDIRECT_URI;
 }
 
 export async function connectMcpOAuth(server: McpServerConfig) {
   try {
     await initializeCrypto();
+    const savedSession = await secureSecretStore.getMcpOAuthSession(server.id);
+    if (
+      savedSession?.clientInformation &&
+      savedSession.redirectUri !== MCP_OAUTH_REDIRECT_URI
+    ) {
+      await secureSecretStore.setMcpOAuthSession(server.id, {
+        ...savedSession,
+        authorizationServerInformation: null,
+        clientInformation: null,
+        codeVerifier: null,
+        expiresAt: null,
+        redirectUri: MCP_OAUTH_REDIRECT_URI,
+        state: null,
+        tokens: null,
+      });
+    }
+
     if (hasManualOAuthConfiguration(server)) {
       await connectManualMcpOAuth(server);
       return;
@@ -1068,9 +1044,12 @@ export async function connectMcpOAuth(server: McpServerConfig) {
 
     await connectDiscoveredMcpOAuth(server);
   } catch (error) {
+    if (isOAuthRegistrationRateLimit(error)) {
+      throw oauthRegistrationRateLimitError();
+    }
+
     if (!isMcpOAuthCanceledError(error)) {
       console.error(error);
-      if (error instanceof Error) console.error(error.stack);
     }
 
     if (

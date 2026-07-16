@@ -112,7 +112,9 @@ export default function SettingsMcpScreen() {
   } = useConfig();
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
-  const [editingServer, setEditingServer] = useState<McpServerConfig | null>(null);
+  const [editingServer, setEditingServer] = useState<McpServerConfig | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [showAdvancedOAuth, setShowAdvancedOAuth] = useState(false);
@@ -157,10 +159,10 @@ export default function SettingsMcpScreen() {
     setShowAdvancedOAuth(
       Boolean(
         server.oauthAllowedAuthOrigin ||
-          server.oauthAuthorizationUrl ||
-          server.oauthClientId ||
-          server.oauthScopes ||
-          server.oauthTokenUrl,
+        server.oauthAuthorizationUrl ||
+        server.oauthClientId ||
+        server.oauthScopes ||
+        server.oauthTokenUrl,
       ),
     );
     setOpen(true);
@@ -290,19 +292,20 @@ export default function SettingsMcpScreen() {
         </Text>
       ) : null}
 
-      <Drawer
-        onOpenChange={setOpen}
-        open={open}
-      >
+      <Drawer onOpenChange={setOpen} open={open}>
         <DrawerContent showCloseButton>
           <DrawerHeader>
-            <DrawerTitle>{editingServer ? "Edit MCP server" : "Add MCP server"}</DrawerTitle>
+            <DrawerTitle>
+              {editingServer ? "Edit MCP server" : "Add MCP server"}
+            </DrawerTitle>
           </DrawerHeader>
           <DrawerBody>
             <View className="gap-sp-3">
               <Field label="Label">
                 <Input
-                  onChangeText={(label) => setDraft((current) => ({ ...current, label }))}
+                  onChangeText={(label) =>
+                    setDraft((current) => ({ ...current, label }))
+                  }
                   placeholder="Linear"
                   value={draft.label}
                 />
@@ -312,7 +315,9 @@ export default function SettingsMcpScreen() {
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="url"
-                  onChangeText={(url) => setDraft((current) => ({ ...current, url }))}
+                  onChangeText={(url) =>
+                    setDraft((current) => ({ ...current, url }))
+                  }
                   placeholder="https://example.com/mcp"
                   value={draft.url}
                 />
@@ -321,12 +326,16 @@ export default function SettingsMcpScreen() {
                 <SegmentButton
                   active={draft.transport === "http"}
                   label="HTTP"
-                  onPress={() => setDraft((current) => ({ ...current, transport: "http" }))}
+                  onPress={() =>
+                    setDraft((current) => ({ ...current, transport: "http" }))
+                  }
                 />
                 <SegmentButton
                   active={draft.transport === "sse"}
                   label="SSE"
-                  onPress={() => setDraft((current) => ({ ...current, transport: "sse" }))}
+                  onPress={() =>
+                    setDraft((current) => ({ ...current, transport: "sse" }))
+                  }
                 />
               </View>
               <View className="flex-row gap-sp-2">
@@ -334,8 +343,16 @@ export default function SettingsMcpScreen() {
                   <SegmentButton
                     key={authMode}
                     active={draft.authMode === authMode}
-                    label={authMode === "none" ? "None" : authMode === "headers" ? "Headers" : "OAuth"}
-                    onPress={() => setDraft((current) => ({ ...current, authMode }))}
+                    label={
+                      authMode === "none"
+                        ? "None"
+                        : authMode === "headers"
+                          ? "Headers"
+                          : "OAuth"
+                    }
+                    onPress={() =>
+                      setDraft((current) => ({ ...current, authMode }))
+                    }
                   />
                 ))}
               </View>
@@ -360,11 +377,6 @@ export default function SettingsMcpScreen() {
               ) : null}
               {draft.authMode === "oauth" ? (
                 <>
-                  <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
-                    Most MCP servers only need the base URL above. OAuth endpoints
-                    and client registration will be discovered automatically when
-                    the server supports it.
-                  </Text>
                   <Button
                     onPress={() => setShowAdvancedOAuth((current) => !current)}
                     size="sm"
@@ -381,7 +393,10 @@ export default function SettingsMcpScreen() {
                           autoCapitalize="none"
                           autoCorrect={false}
                           onChangeText={(oauthClientId) =>
-                            setDraft((current) => ({ ...current, oauthClientId }))
+                            setDraft((current) => ({
+                              ...current,
+                              oauthClientId,
+                            }))
                           }
                           placeholder="Use this if the server requires a pre-registered app"
                           value={draft.oauthClientId}
@@ -408,7 +423,10 @@ export default function SettingsMcpScreen() {
                           autoCorrect={false}
                           keyboardType="url"
                           onChangeText={(oauthTokenUrl) =>
-                            setDraft((current) => ({ ...current, oauthTokenUrl }))
+                            setDraft((current) => ({
+                              ...current,
+                              oauthTokenUrl,
+                            }))
                           }
                           placeholder="Override discovery only when needed"
                           value={draft.oauthTokenUrl}
@@ -449,7 +467,10 @@ export default function SettingsMcpScreen() {
                 accessibilityState={{ checked: draft.enabled }}
                 className="min-h-12 flex-row items-center justify-between gap-sp-3"
                 onPress={() =>
-                  setDraft((current) => ({ ...current, enabled: !current.enabled }))
+                  setDraft((current) => ({
+                    ...current,
+                    enabled: !current.enabled,
+                  }))
                 }
               >
                 <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
@@ -480,13 +501,7 @@ export default function SettingsMcpScreen() {
   );
 }
 
-function Field({
-  children,
-  label,
-}: {
-  children: ReactNode;
-  label: string;
-}) {
+function Field({ children, label }: { children: ReactNode; label: string }) {
   return (
     <View className="gap-sp-2">
       <Text className="font-sans text-sm font-medium text-foreground dark:text-foreground-dark">
@@ -507,7 +522,11 @@ function SegmentButton({
   onPress: () => void;
 }) {
   return (
-    <Button className="flex-1" onPress={onPress} variant={active ? "default" : "outline"}>
+    <Button
+      className="flex-1"
+      onPress={onPress}
+      variant={active ? "default" : "outline"}
+    >
       {label}
     </Button>
   );
@@ -571,10 +590,7 @@ function ServerRow({
           ) : null}
         </View>
         <View pointerEvents="none">
-          <Checkbox
-            checked={server.enabled}
-            onCheckedChange={() => {}}
-          />
+          <Checkbox checked={server.enabled} onCheckedChange={() => {}} />
         </View>
       </Pressable>
       <View className="flex-row flex-wrap gap-sp-2">
