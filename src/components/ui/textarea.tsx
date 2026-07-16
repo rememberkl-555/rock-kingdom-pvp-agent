@@ -56,8 +56,10 @@ export const Textarea = forwardRef<TextInput, TextareaProps>(
           setFocused(true);
           onFocus?.(event);
         }}
+        cursorColor={theme.text}
         placeholderTextColor={theme.textSecondary}
-        selectionColor={theme.text}
+        selectionColor={theme.backgroundSelected}
+        selectionHandleColor={theme.text}
         style={[
           Platform.OS === 'android' ? { textAlignVertical: 'top' } : null,
           style,
