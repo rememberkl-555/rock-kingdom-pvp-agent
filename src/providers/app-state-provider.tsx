@@ -1756,8 +1756,27 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
       throw new Error("MCP server not found.");
     }
 
-    await connectMcpOAuth(server);
-    await hydrate();
+    try {
+      await connectMcpOAuth(server);
+      await repositoriesRef.current.mcpServerRepository.updateConnectionState(
+        serverId,
+        {
+          lastError: null,
+          lastStatus: "untested",
+        },
+      );
+    } catch (error) {
+      await repositoriesRef.current.mcpServerRepository.updateConnectionState(
+        serverId,
+        {
+          lastError: error instanceof Error ? error.message : String(error),
+          lastStatus: "failed",
+        },
+      );
+      throw error;
+    } finally {
+      await hydrate();
+    }
   }
 
   async function testMcpServer(serverId: string) {

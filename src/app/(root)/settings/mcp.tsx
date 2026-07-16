@@ -82,6 +82,31 @@ function parseHeaderText(value: string) {
   );
 }
 
+function formatMcpError(message: string) {
+  const withoutMachineCode = message.replace(
+    /^[a-z][a-z0-9_]*_[a-z0-9_]+:\s*/,
+    "",
+  );
+  const legacyPrefix = /^Could not connect using Streamable HTTP or SSE\.\s*/i;
+  if (!legacyPrefix.test(withoutMachineCode)) return withoutMachineCode;
+
+  const transportErrors = withoutMachineCode
+    .replace(legacyPrefix, "")
+    .split(/\s+\|\s+(?=(?:HTTP|SSE):)/i)
+    .map((entry) => entry.replace(/^(?:HTTP|SSE):\s*/i, "").trim())
+    .filter(Boolean);
+  const specific = transportErrors.find((entry) =>
+    /oauth|error_description|unauthori[sz]ed|forbidden|invalid_|\b(?:400|401|403|404|409|422|429)\b/i.test(
+      entry,
+    ),
+  );
+
+  return (specific ?? transportErrors[0] ?? withoutMachineCode).replace(
+    /^[a-z][a-z0-9_]*_[a-z0-9_]+:\s*/,
+    "",
+  );
+}
+
 function draftFromServer(server: McpServerConfig): Draft {
   return {
     authMode: server.authMode,
@@ -585,7 +610,7 @@ function ServerRow({
               className="font-sans text-xs text-destructive dark:text-destructive-dark"
               numberOfLines={2}
             >
-              {server.lastError}
+              {formatMcpError(server.lastError)}
             </Text>
           ) : null}
         </View>

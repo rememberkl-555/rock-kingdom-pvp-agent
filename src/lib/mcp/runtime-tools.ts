@@ -5,6 +5,10 @@ import type {
 import type { ToolSet } from "ai";
 import { Platform } from "react-native";
 import "react-native-get-random-values";
+import { createMcpTransportOAuthProvider } from "@/lib/mcp/oauth";
+import { secureSecretStore } from "@/lib/secrets";
+import { createRecord, summarizeValue } from "@/lib/tools/built-in/shared";
+import type { McpServerConfig, ToolExecutionRecord } from "@/types/app-state";
 
 let cryptoInstalled = false;
 
@@ -45,11 +49,6 @@ if (
   };
 }
 
-import { createMcpTransportOAuthProvider } from "@/lib/mcp/oauth";
-import { secureSecretStore } from "@/lib/secrets";
-import { createRecord, summarizeValue } from "@/lib/tools/built-in/shared";
-import type { McpServerConfig, ToolExecutionRecord } from "@/types/app-state";
-
 type McpRuntimeServerResult = {
   error: string | null;
   instructions: string | null;
@@ -85,6 +84,63 @@ function getErrorMessage(error: unknown) {
     : "Failed to connect MCP server.";
 }
 
+function parseOAuthErrorMessage(message: string) {
+  const descriptionMatch = message.match(
+    /["']error_description["']\s*:\s*["']([^"']+)["']/i,
+  );
+  if (descriptionMatch?.[1]) {
+    return descriptionMatch[1];
+  }
+
+  return null;
+}
+
+function getActionableMcpErrorMessages(error: unknown, depth = 0): string[] {
+  if (depth > 4) return [];
+
+  if (error instanceof Error) {
+    const nested = getActionableMcpErrorMessages(
+      (error as Error & { cause?: unknown }).cause,
+      depth + 1,
+    );
+    const parsedOAuthError = parseOAuthErrorMessage(error.message);
+    return [parsedOAuthError ?? error.message, ...nested].filter(Boolean);
+  }
+
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const description =
+      typeof record.error_description === "string"
+        ? record.error_description
+        : null;
+    const ownMessage = description
+      ? description
+      : typeof record.message === "string"
+        ? record.message
+        : null;
+    return [
+      ...(ownMessage ? [ownMessage] : []),
+      ...getActionableMcpErrorMessages(record.cause, depth + 1),
+    ];
+  }
+
+  return typeof error === "string" && error.trim() ? [error] : [];
+}
+
+function getActionableMcpErrorMessage(errors: unknown[]) {
+  const messages = errors
+    .flatMap((error) => getActionableMcpErrorMessages(error))
+    .map((message) => message.trim())
+    .filter(Boolean);
+  const specific = messages.find((message) =>
+    /error_description|oauth|unauthori[sz]ed|forbidden|invalid_|\b(?:400|401|403|404|409|422|429)\b/i.test(
+      message,
+    ),
+  );
+
+  return specific ?? messages[0] ?? "Failed to connect MCP server.";
+}
+
 async function buildMcpHeaders(server: McpServerConfig) {
   const headers =
     server.authMode === "headers"
@@ -105,7 +161,7 @@ async function connectMcpClient(
   headers: Record<string, string>,
 ) {
   const transports = [server.transport, alternateTransport(server.transport)];
-  const failures: string[] = [];
+  const failures: unknown[] = [];
 
   for (const transportType of transports) {
     try {
@@ -124,15 +180,11 @@ async function connectMcpClient(
         },
       });
     } catch (error) {
-      failures.push(
-        `${transportType.toUpperCase()}: ${getErrorMessage(error)}`,
-      );
+      failures.push(error);
     }
   }
 
-  throw new Error(
-    `Could not connect using Streamable HTTP or SSE. ${failures.join(" | ")}`,
-  );
+  throw new Error(getActionableMcpErrorMessage(failures));
 }
 
 function sanitizeJsonSchema(
@@ -211,9 +263,7 @@ function summarizeMcpOutput(output: unknown) {
     "content" in content &&
     Array.isArray((content as { content?: unknown }).content)
   ) {
-    const text = (
-      content as { content: Array<Record<string, unknown>> }
-    ).content
+    const text = (content as { content: Record<string, unknown>[] }).content
       .map((part) => (part.type === "text" ? part.text : null))
       .filter((part): part is string => typeof part === "string")
       .join("\n");
@@ -233,7 +283,7 @@ export async function createMcpRuntimeTools(params: {
   const clients: MCPClient[] = [];
   const displayNames = new Map<string, string>();
   const serverResults: McpRuntimeServerResult[] = [];
-  const toolEntries: Array<[string, ToolSet[string] | unknown]> = [];
+  const toolEntries: [string, ToolSet[string] | unknown][] = [];
   const instructions: string[] = [];
 
   for (const server of params.servers.filter((item) => item.enabled)) {

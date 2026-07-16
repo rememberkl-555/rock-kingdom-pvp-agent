@@ -426,14 +426,30 @@ async function registerDiscoveryClient(input: {
     },
     body: JSON.stringify(input.provider.clientMetadata),
   });
-
+  const responseBody = await response.text();
   if (!response.ok) {
+    let serverError: Record<string, unknown> | null = null;
+    try {
+      serverError = JSON.parse(responseBody) as Record<string, unknown>;
+    } catch {}
+    const errorCode =
+      typeof serverError?.error === "string" ? serverError.error : null;
+    const errorDescription =
+      typeof serverError?.error_description === "string"
+        ? serverError.error_description
+        : null;
+    const serverMessage = errorDescription ?? errorCode;
     throw new Error(
-      `OAuth client registration failed (${response.status}). Add a client ID in Advanced OAuth overrides and try again.`,
+      `OAuth client registration failed (${response.status})${serverMessage ? `: ${serverMessage}` : "."}`,
     );
   }
 
-  const payload = (await response.json()) as Record<string, unknown>;
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(responseBody) as Record<string, unknown>;
+  } catch {
+    throw new Error("OAuth client registration returned invalid JSON.");
+  }
 
   if (typeof payload.client_id !== "string" || !payload.client_id.trim()) {
     throw new Error("OAuth client registration did not return a client ID.");
