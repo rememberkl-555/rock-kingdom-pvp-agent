@@ -61,7 +61,9 @@ async function generateViaAISDKWithContinuation(
         params.onEvent?.("tool-execution-start", event);
       },
       providerOptions: params.providerOptions as any,
-      reasoning: params.reasoning,
+      ...(params.reasoning !== undefined
+        ? { reasoning: params.reasoning }
+        : {}),
       stopWhen: stepCountIs(params.maxToolSteps),
       system: params.system,
       tools: params.tools,
@@ -187,7 +189,9 @@ export async function generateViaAISDKNonStreaming(
       params.onEvent?.("tool-execution-start", event);
     },
     providerOptions: params.providerOptions as any,
-    reasoning: params.reasoning,
+    ...(params.reasoning !== undefined
+      ? { reasoning: params.reasoning }
+      : {}),
     stopWhen: stepCountIs(params.maxToolSteps),
     system: params.system,
     tools: params.tools,
