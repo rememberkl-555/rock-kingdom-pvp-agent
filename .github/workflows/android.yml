@@ -35,14 +35,14 @@ jobs:
             gradle-${{ runner.os }}-
       - run: pnpm install --frozen-lockfile
         timeout-minutes: 10
-      - run: npx expo prebuild --platform android --clean --no-install
+      - run: npx expo prebuild --platform android --clean
         timeout-minutes: 10
       - name: Build APK
         run: |
           cd android
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-          ./gradlew assembleRelease --no-daemon --no-build-cache
+          ./gradlew assembleDebug --no-daemon --no-build-cache
         timeout-minutes: 30
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
@@ -50,14 +50,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mobile-agent-pvp-apk
-          path: android/app/build/outputs/apk/release/*.apk
+          path: android/app/build/outputs/apk/debug/*.apk
           compression-level: 0
           retention-days: 30
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.5.5
           name: "洛克王国 PVP AI 代打系统 v1.5.5（汉化版）"
-          files: android/app/build/outputs/apk/release/*.apk
+          files: android/app/build/outputs/apk/debug/*.apk
           body: |
             # Rock Kingdom PVP AI Agent v1.5.3
             - PVP AI Agent full module
