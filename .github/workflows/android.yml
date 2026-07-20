@@ -8,7 +8,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -39,12 +39,11 @@ jobs:
         run: |
           cd android
           # Force JS bundle to be embedded in debug APK
-          # Set debuggableVariants to empty to force JS bundling
           sed -i '/^react {/a\    debuggableVariants = []' app/build.gradle
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
           ./gradlew assembleDebug --no-daemon --no-build-cache
-        timeout-minutes: 30
+        timeout-minutes: 60
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
       - name: Upload APK
