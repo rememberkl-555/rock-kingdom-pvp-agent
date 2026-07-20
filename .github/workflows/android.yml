@@ -35,14 +35,13 @@ jobs:
         timeout-minutes: 10
       - run: npx expo prebuild --platform android --clean
         timeout-minutes: 10
-      - name: Build APK
+      - name: Build Release APK
         run: |
           cd android
-          # Force JS bundle to be embedded in debug APK
-          sed -i '/^react {/a\    debuggableVariants = []' app/build.gradle
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-          ./gradlew assembleDebug --no-daemon --no-build-cache
+          # Build release APK (uses debug.keystore for signing)
+          ./gradlew assembleRelease --no-daemon --no-build-cache
         timeout-minutes: 60
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
@@ -50,18 +49,18 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mobile-agent-pvp-apk
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: android/app/build/outputs/apk/release/*.apk
           compression-level: 0
           retention-days: 30
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.5.5
-          name: "洛克王国 PVP AI 代打系统 v1.5.5（汉化版）"
-          files: android/app/build/outputs/apk/debug/*.apk
+          name: "洛克王国 PVP AI 代打系统 v1.5.5（正式版）"
+          files: android/app/build/outputs/apk/release/*.apk
           body: |
-            # 洛克王国 PVP AI 代打系统 v1.5.5
+            # 洛克王国 PVP AI 代打系统 v1.5.5（正式版）
+            - Release 正式版，无开发工具界面
             - 全中文界面，应用名「洛克王国」
-            - JS 直接打包进 APK（无需开发服务器）
             - PVP AI 代打完整模块
             - 云端服务器：193.112.187.72:8047
           prerelease: true
