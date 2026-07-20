@@ -35,12 +35,11 @@ jobs:
         timeout-minutes: 10
       - run: npx expo prebuild --platform android --clean
         timeout-minutes: 10
-      - name: Build Release APK
+      - name: Build APK (Release)
         run: |
           cd android
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-          # Build release APK (uses debug.keystore for signing)
           ./gradlew assembleRelease --no-daemon --no-build-cache
         timeout-minutes: 60
         env:
@@ -59,8 +58,8 @@ jobs:
           files: android/app/build/outputs/apk/release/*.apk
           body: |
             # 洛克王国 PVP AI 代打系统 v1.5.5（正式版）
-            - Release 正式版，无开发工具界面
-            - 全中文界面，应用名「洛克王国」
+            - 正式版，无开发客户端启动器
+            - 即开即用，直接进入 App
+            - 全中文界面
             - PVP AI 代打完整模块
-            - 云端服务器：193.112.187.72:8047
           prerelease: true
