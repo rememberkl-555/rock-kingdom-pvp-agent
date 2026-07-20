@@ -39,7 +39,8 @@ jobs:
         run: |
           cd android
           # Force JS bundle to be embedded in debug APK
-          sed -i 's/autolinkLibrariesWithApp()/bundleInDebug = true\n    autolinkLibrariesWithApp()/' app/build.gradle
+          # Set debuggableVariants to empty to force JS bundling
+          sed -i '/^react {/a\    debuggableVariants = []' app/build.gradle
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
           ./gradlew assembleDebug --no-daemon --no-build-cache
@@ -60,10 +61,8 @@ jobs:
           files: android/app/build/outputs/apk/debug/*.apk
           body: |
             # 洛克王国 PVP AI 代打系统 v1.5.5
-            - PVP AI Agent full module
-            - Battle state parser (sensenova-6.7-flash-lite)
-            - Strategy engine (deepseek-v4-flash)
-            - HUD real-time thinking display
-            - Battle loop controller
-            - Cloud server: 193.112.187.72:8047
+            - 全中文界面，应用名「洛克王国」
+            - JS 直接打包进 APK（无需开发服务器）
+            - PVP AI 代打完整模块
+            - 云端服务器：193.112.187.72:8047
           prerelease: true
