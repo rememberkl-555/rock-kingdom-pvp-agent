@@ -3,10 +3,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-
 permissions:
   contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -40,6 +38,8 @@ jobs:
       - name: Build APK
         run: |
           cd android
+          sed -i 's/autolinkLibrariesWithApp()/bundleInDebug = true
+    autolinkLibrariesWithApp()/' app/build.gradle
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
           ./gradlew assembleDebug --no-daemon --no-build-cache
@@ -59,7 +59,7 @@ jobs:
           name: "洛克王国 PVP AI 代打系统 v1.5.5（汉化版）"
           files: android/app/build/outputs/apk/debug/*.apk
           body: |
-            # Rock Kingdom PVP AI Agent v1.5.3
+            # 洛克王国 PVP AI 代打系统 v1.5.5
             - PVP AI Agent full module
             - Battle state parser (sensenova-6.7-flash-lite)
             - Strategy engine (deepseek-v4-flash)
