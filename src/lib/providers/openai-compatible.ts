@@ -19,6 +19,7 @@ const OPENAI_COMPATIBLE_PROFILES = [
   ["deepseek", "DeepSeek", "https://api.deepseek.com/v1"],
   ["fireworks", "Fireworks AI", "https://api.fireworks.ai/inference/v1"],
   ["groq", "Groq", "https://api.groq.com/openai/v1"],
+  ["sensenova", "SenseNova", "https://token.sensenova.cn/v1"],
   ["togetherai", "Together AI", "https://api.together.xyz/v1"],
   ["xai", "xAI", "https://api.x.ai/v1"],
 ] as const;
