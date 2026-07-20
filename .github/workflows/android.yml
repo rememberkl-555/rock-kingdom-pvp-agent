@@ -35,11 +35,14 @@ jobs:
         timeout-minutes: 10
       - run: npx expo prebuild --platform android --clean
         timeout-minutes: 10
-      - name: Build APK
+      - name: Build APK (with embedded JS bundle)
         run: |
           cd android
-          sed -i 's/autolinkLibrariesWithApp()/bundleInDebug = true
-    autolinkLibrariesWithApp()/' app/build.gradle
+          # Use printf to properly insert newline for bundleInDebug=true
+          sed -i "s/autolinkLibrariesWithApp()/bundleInDebug = true
+    autolinkLibrariesWithApp()/" app/build.gradle
+          # Also remove 'debug' from debuggableVariants to force bundle
+          sed -i "s/debuggableVariants = \["debug"\]/debuggableVariants = []/" app/build.gradle || true
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
           ./gradlew assembleDebug --no-daemon --no-build-cache
