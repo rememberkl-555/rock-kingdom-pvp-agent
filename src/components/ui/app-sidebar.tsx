@@ -35,12 +35,12 @@ export function AppSidebar() {
     <Sidebar showCloseButton>
       <SidebarHeader>
         <Text className="font-sans text-2xl font-semibold text-foreground dark:text-foreground-dark">
-          Mobile Agent
+          手机助手
         </Text>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Chats</SidebarGroupLabel>
+          <SidebarGroupLabel>聊天</SidebarGroupLabel>
           <SidebarMenu>
             {conversations.map((conversation) => (
               <SidebarMenuItem key={conversation.id}>
@@ -108,7 +108,7 @@ export function AppSidebar() {
             {conversations.length === 0 ? (
               <SidebarMenuItem>
                 <Text className="px-sp-2 font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
-                  Your chats will show up here after hydration finishes.
+                  等待数据加载完成后，你的对话将显示在这里。
                 </Text>
               </SidebarMenuItem>
             ) : null}
@@ -130,7 +130,7 @@ export function AppSidebar() {
                 router.push("/settings");
               }}
             >
-              Settings
+              设置
             </SidebarMenuButton>
           </SidebarClose>
         </View>
@@ -166,7 +166,7 @@ function ChatOptions({
 
       <DropdownMenuContent width={160}>
         <DropdownMenuItem onPress={() => deleteConversation(conversationId)}>
-          Delete
+          删除
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
