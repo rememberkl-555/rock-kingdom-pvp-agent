@@ -58,7 +58,7 @@ import {
     MessageScrollerButton,
     MessageScrollerItem,
     MessageScrollerList,
-    MessageScrollerProvider,
+    MessageScroller提供商,
     useMessageScroller,
 } from "@/components/ui/message-scroller";
 import { Separator } from "@/components/ui/separator";
@@ -75,7 +75,7 @@ import { resolveWorkspaceFile } from "@/lib/workspace/workspace-file-service";
 import { cn } from "@/lib/utils";
 import type {
     ExternalFolderSession,
-    ModelRef,
+    模型Ref,
     SkillConfig,
     WorkspaceFile,
 } from "@/types/app-state";
@@ -112,10 +112,10 @@ function matchesMenuQuery(
 }
 
 const STARTER_PROMPTS = [
-    "Design a landing page",
-    "Draft a professional email",
-    "Brainstorm ideas for a side project",
-    "Remember that I prefer concise answers",
+    "设计一个落地页",
+    "起草一封专业邮件",
+    "为副业项目头脑风暴",
+    "记住我喜欢简洁的回答",
 ];
 
 function logComposerDebug(label: string, data: Record<string, unknown>) {
@@ -130,19 +130,19 @@ export default function Screen() {
     const { error, hydrating, ready } = useAppState();
     const [infoDrawerOpen, setInfoDrawerOpen] = useState(false);
     const {
-        activeModels,
-        currentModel,
-        currentModelSupportsImageGeneration,
-        currentModelSupportsImageInput,
-        currentModelSupportsTools,
-        selectModel,
+        active模型s,
+        current模型,
+        current模型SupportsImageGeneration,
+        current模型SupportsImageInput,
+        current模型Supports工具s,
+        select模型,
         toolApprovalMode,
-        updateToolApprovalMode,
+        update工具ApprovalMode,
     } = useConfig();
     const chatInfo = useChatInfo();
     const {
-        approvePendingToolApproval,
-        denyPendingToolApproval,
+        approvePending工具Approval,
+        denyPending工具Approval,
         clearConversationFolder,
         clearWorkspaceFiles,
         deleteWorkspaceFile,
@@ -151,7 +151,7 @@ export default function Screen() {
         currentSelectedFileIds,
         currentSelectedSkillIds,
         messages,
-        pendingToolApproval,
+        pending工具Approval,
         pickConversationFolder,
         sendMessage,
         stopSending,
@@ -194,7 +194,7 @@ export default function Screen() {
                     </Button>
                 </View>
 
-                <MessageScrollerProvider autoScroll>
+                <MessageScroller提供商 autoScroll>
                     <MessageScroller className="flex-1 rounded-none border-0">
                         <MessageScrollerList
                             contentContainerClassName="py-sp-4"
@@ -212,7 +212,7 @@ export default function Screen() {
                             showsVerticalScrollIndicator={false}
                             ListEmptyComponent={
                                 ready && !hydrating ? (
-                                    currentModel ? (
+                                    current模型 ? (
                                         <View className="pb-sp-4">
                                             {STARTER_PROMPTS.map((prompt) => (
                                                 <Button
@@ -232,7 +232,7 @@ export default function Screen() {
                                     ) : (
                                         <View className="px-sp-2 py-sp-8">
                                             <Text className="font-sans text-base text-muted-foreground dark:text-muted-foreground-dark">
-                                                Connect a model to start chatting.
+                                                连接模型后即可开始聊天。
                                             </Text>
                                         </View>
                                     )
@@ -249,31 +249,31 @@ export default function Screen() {
                         </Text>
                     ) : null}
 
-                    {!currentModel && ready && !hydrating ? (
+                    {!current模型 && ready && !hydrating ? (
                         <Button
                             onPress={() => {
                                 router.push("/settings");
                             }}
                             variant="outline"
                         >
-                            Open settings
+                            打开设置
                         </Button>
                     ) : null}
 
                     <ChatInput
-                        canSend={ready && !hydrating && currentModel !== null}
+                        canSend={ready && !hydrating && current模型 !== null}
                         createWorkspaceFile={createWorkspaceFile}
-                        currentModelLabel={
-                            currentModel
-                                ? `${currentModel.providerLabel} · ${currentModel.label}`
+                        current模型Label={
+                            current模型
+                                ? `${current模型.providerLabel} · ${current模型.label}`
                                 : null
                         }
-                        activeModels={activeModels.map((model) => ({
+                        active模型s={active模型s.map((model) => ({
                             label: model.label,
                             providerLabel: model.providerLabel,
                             ref: model.ref,
                         }))}
-                        currentModelRef={currentModel?.ref ?? null}
+                        current模型Ref={current模型?.ref ?? null}
                         importFiles={importFiles}
                         loading={currentConversationBusy}
                         onCreateConversation={createConversation}
@@ -288,42 +288,42 @@ export default function Screen() {
                         clearWorkspaceFiles={clearWorkspaceFiles}
                         deleteWorkspaceFile={deleteWorkspaceFile}
                         refreshWorkspaceFiles={refreshWorkspaceFiles}
-                        selectModel={selectModel}
+                        select模型={select模型}
                         selectedFileIds={currentSelectedFileIds}
                         setSelectedFileIds={setCurrentSelectedFileIds}
                         selectedSkillIds={currentSelectedSkillIds}
                         setSelectedSkillIds={setCurrentSelectedSkillIds}
                         skills={skills}
-                        supportsImageGeneration={currentModelSupportsImageGeneration}
-                        supportsImageInput={currentModelSupportsImageInput}
-                        supportsTools={currentModelSupportsTools}
+                        supportsImageGeneration={current模型SupportsImageGeneration}
+                        supportsImageInput={current模型SupportsImageInput}
+                        supports工具s={current模型Supports工具s}
                         toolApprovalMode={toolApprovalMode}
-                        updateToolApprovalMode={updateToolApprovalMode}
+                        update工具ApprovalMode={update工具ApprovalMode}
                         workspaceFiles={workspaceFiles}
                     />
-                </MessageScrollerProvider>
+                </MessageScroller提供商>
 
-                <Drawer dismissible={false} open={pendingToolApproval !== null}>
+                <Drawer dismissible={false} open={pending工具Approval !== null}>
                     <DrawerContent
                         closeOnOverlayPress={false}
                         showCloseButton={false}
                         showHandle={false}
                     >
                         <DrawerHeader>
-                            <DrawerTitle>Tool approval</DrawerTitle>
+                            <DrawerTitle>工具审批</DrawerTitle>
                             <DrawerDescription>
-                                Paused in {pendingToolApproval?.chatTitle ?? "this chat"} until
+                                暂停于 {pending工具Approval?.chatTitle ?? "此对话"} until
                                 you decide.
                             </DrawerDescription>
                         </DrawerHeader>
                         <DrawerBody className="flex-0" contentContainerClassName="gap-sp-3">
                             <View className="gap-sp-2 rounded-ui border border-border bg-card px-sp-4 py-sp-3 dark:border-border-dark dark:bg-card-dark">
                                 <Text className="font-sans text-sm font-medium text-foreground dark:text-foreground-dark">
-                                    {formatToolName(pendingToolApproval?.toolName ?? "")}
+                                    {format工具Name(pending工具Approval?.toolName ?? "")}
                                 </Text>
-                                {pendingToolApproval?.inputSummary ? (
+                                {pending工具Approval?.inputSummary ? (
                                     <Text className="font-mono text-xs text-muted-foreground dark:text-muted-foreground-dark">
-                                        {pendingToolApproval.inputSummary}
+                                        {pending工具Approval.inputSummary}
                                     </Text>
                                 ) : null}
                             </View>
@@ -332,13 +332,13 @@ export default function Screen() {
                             <View className="flex-row gap-sp-2">
                                 <Button
                                     className="flex-1"
-                                    onPress={denyPendingToolApproval}
+                                    onPress={denyPending工具Approval}
                                     variant="outline"
                                 >
-                                    Deny
+                                    拒绝
                                 </Button>
-                                <Button className="flex-1" onPress={approvePendingToolApproval}>
-                                    Allow once
+                                <Button className="flex-1" onPress={approvePending工具Approval}>
+                                    允许一次
                                 </Button>
                             </View>
                         </DrawerFooter>
@@ -348,44 +348,44 @@ export default function Screen() {
                 <Drawer onOpenChange={setInfoDrawerOpen} open={infoDrawerOpen}>
                     <DrawerContent showCloseButton showHandle>
                         <DrawerHeader>
-                            <DrawerTitle>Chat info</DrawerTitle>
+                            <DrawerTitle>对话信息</DrawerTitle>
                             <DrawerDescription>
-                                Model, usage, context, and cost for this conversation.
+                                当前对话的模型、用量、上下文和费用。
                             </DrawerDescription>
                         </DrawerHeader>
                         <DrawerBody contentContainerClassName="gap-sp-3 pb-sp-4">
-                            <InfoSection title="Model">
+                            <InfoSection title="模型">
                                 <InfoRow
-                                    label="Provider"
-                                    value={chatInfo.currentModel?.providerLabel ?? "Unavailable"}
+                                    label="提供商"
+                                    value={chatInfo.current模型?.providerLabel ?? "不可用"}
                                 />
                                 <InfoRow
-                                    label="Selected model"
-                                    value={chatInfo.currentModel?.modelLabel ?? "Unavailable"}
+                                    label="选择模型"
+                                    value={chatInfo.current模型?.modelLabel ?? "不可用"}
                                 />
                             </InfoSection>
 
-                            <InfoSection title="Latest turn">
+                            <InfoSection title="最新回合">
                                 <InfoRow
-                                    label="Input tokens"
+                                    label="输入 Token"
                                     value={formatTokenCount(
                                         chatInfo.latestTurn?.inputTokens ?? null,
                                     )}
                                 />
                                 <InfoRow
-                                    label="Output tokens"
+                                    label="输出 Token"
                                     value={formatTokenCount(
                                         chatInfo.latestTurn?.outputTokens ?? null,
                                     )}
                                 />
                                 <InfoRow
-                                    label="Total tokens"
+                                    label="总 Token"
                                     value={formatTokenCount(
                                         chatInfo.latestTurn?.totalTokens ?? null,
                                     )}
                                 />
                                 <InfoRow
-                                    label="Cost"
+                                    label="费用"
                                     value={formatCurrency(chatInfo.latestTurn?.costTotal ?? null)}
                                 />
                             </InfoSection>
@@ -393,62 +393,62 @@ export default function Screen() {
                             <InfoSection
                                 subtitle={
                                     chatInfo.conversationTotals?.isPartial
-                                        ? "Partial data"
+                                        ? "部分数据"
                                         : undefined
                                 }
-                                title="Conversation totals"
+                                title="对话总计"
                             >
                                 <InfoRow
-                                    label="Input tokens"
+                                    label="输入 Token"
                                     value={formatTokenCount(
                                         chatInfo.conversationTotals?.inputTokens ?? null,
                                     )}
                                 />
                                 <InfoRow
-                                    label="Output tokens"
+                                    label="输出 Token"
                                     value={formatTokenCount(
                                         chatInfo.conversationTotals?.outputTokens ?? null,
                                     )}
                                 />
                                 <InfoRow
-                                    label="Total tokens"
+                                    label="总 Token"
                                     value={formatTokenCount(
                                         chatInfo.conversationTotals?.totalTokens ?? null,
                                     )}
                                 />
                                 <InfoRow
-                                    label="Cost"
+                                    label="费用"
                                     value={formatCurrency(
                                         chatInfo.conversationTotals?.costTotal ?? null,
                                     )}
                                 />
                             </InfoSection>
 
-                            <InfoSection title="Context">
+                            <InfoSection title="上下文">
                                 <InfoRow
-                                    label="Context window"
+                                    label="上下文窗口"
                                     value={formatTokenCount(
                                         chatInfo.latestTurn?.contextWindow ??
-                                        chatInfo.currentModel?.contextWindow ??
+                                        chatInfo.current模型?.contextWindow ??
                                         null,
                                     )}
                                 />
                                 <InfoRow
-                                    label="Used"
+                                    label="已用"
                                     value={formatTokenCount(
                                         chatInfo.latestTurn?.totalTokens ?? null,
                                     )}
                                 />
                                 <InfoRow
-                                    label="Remaining"
+                                    label="剩余"
                                     value={formatTokenCount(
-                                        chatInfo.latestTurn?.remainingContext ?? null,
+                                        chatInfo.latestTurn?.remaining上下文 ?? null,
                                     )}
                                 />
                                 <InfoRow
-                                    label="Usage"
+                                    label="用量"
                                     value={formatPercent(
-                                        chatInfo.latestTurn?.contextUsagePercent ?? null,
+                                        chatInfo.latestTurn?.context用量Percent ?? null,
                                     )}
                                 />
                             </InfoSection>
@@ -462,7 +462,7 @@ export default function Screen() {
 
 function formatTokenCount(value: number | null) {
     if (value === null) {
-        return "Unavailable";
+        return "不可用";
     }
 
     return Math.round(value).toLocaleString();
@@ -470,7 +470,7 @@ function formatTokenCount(value: number | null) {
 
 function formatCurrency(value: number | null) {
     if (value === null) {
-        return "Unavailable";
+        return "不可用";
     }
 
     if (value > 0 && value < 0.000001) {
@@ -482,15 +482,15 @@ function formatCurrency(value: number | null) {
 
 function formatPercent(value: number | null) {
     if (value === null) {
-        return "Unavailable";
+        return "不可用";
     }
 
     return `${value.toFixed(1)}%`;
 }
 
-function formatToolName(toolName: string) {
+function format工具Name(toolName: string) {
     if (!toolName) {
-        return "Tool";
+        return "工具";
     }
 
     return toolName
@@ -539,12 +539,12 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 function ChatInput({
-    activeModels,
+    active模型s,
     canSend,
     createWorkspaceFile,
     currentExternalFolderSession,
-    currentModelLabel,
-    currentModelRef,
+    current模型Label,
+    current模型Ref,
     importFiles,
     loading,
     onCreateConversation,
@@ -556,7 +556,7 @@ function ChatInput({
     clearWorkspaceFiles,
     deleteWorkspaceFile,
     refreshWorkspaceFiles,
-    selectModel,
+    select模型,
     selectedFileIds,
     selectedSkillIds,
     setSelectedFileIds,
@@ -564,15 +564,15 @@ function ChatInput({
     skills,
     supportsImageGeneration,
     supportsImageInput,
-    supportsTools,
+    supports工具s,
     toolApprovalMode,
-    updateToolApprovalMode,
+    update工具ApprovalMode,
     workspaceFiles,
 }: {
-    activeModels: Array<{
+    active模型s: Array<{
         label: string;
         providerLabel: string;
-        ref: ModelRef;
+        ref: 模型Ref;
     }>;
     canSend: boolean;
     clearConversationFolder: () => Promise<void>;
@@ -583,8 +583,8 @@ function ChatInput({
         name: string;
     }) => Promise<WorkspaceFile>;
     currentExternalFolderSession: ExternalFolderSession | null;
-    currentModelLabel: string | null;
-    currentModelRef: ModelRef | null;
+    current模型Label: string | null;
+    current模型Ref: 模型Ref | null;
     importFiles: typeof useChat extends () => infer T
     ? T extends { importFiles: infer F }
     ? F
@@ -595,13 +595,13 @@ function ChatInput({
     onOpenSettings: () => void;
     onSend: (input: {
         content: string;
-        fileContextSource?: "external-folder" | "workspace";
+        file上下文Source?: "external-folder" | "workspace";
         selectedFileIds?: string[];
     }) => Promise<void>;
     onStop: () => Promise<void>;
     pickConversationFolder: () => Promise<ExternalFolderSession>;
     refreshWorkspaceFiles: () => Promise<void>;
-    selectModel: (modelRef: ModelRef) => Promise<void>;
+    select模型: (modelRef: 模型Ref) => Promise<void>;
     selectedFileIds: string[];
     selectedSkillIds: string[];
     setSelectedFileIds: (selectedFileIds: string[]) => Promise<void>;
@@ -609,9 +609,9 @@ function ChatInput({
     skills: SkillConfig[];
     supportsImageGeneration: boolean;
     supportsImageInput: boolean;
-    supportsTools: boolean;
+    supports工具s: boolean;
     toolApprovalMode: "ask" | "auto";
-    updateToolApprovalMode: (mode: "ask" | "auto") => Promise<void>;
+    update工具ApprovalMode: (mode: "ask" | "auto") => Promise<void>;
     workspaceFiles: WorkspaceFile[];
 }) {
     const theme = useTheme();
@@ -621,7 +621,7 @@ function ChatInput({
     const [composerContentHeight, setComposerContentHeight] = useState(0);
     const [filesDrawerOpen, setFilesDrawerOpen] = useState(false);
     const [expandedComposerOpen, setExpandedComposerOpen] = useState(false);
-    const [modelsDrawerOpen, setModelsDrawerOpen] = useState(false);
+    const [modelsDrawerOpen, set模型sDrawerOpen] = useState(false);
     const [newFileDrawerOpen, setNewFileDrawerOpen] = useState(false);
     const [skillsDrawerOpen, setSkillsDrawerOpen] = useState(false);
     const [newFileName, setNewFileName] = useState("");
@@ -697,12 +697,12 @@ function ChatInput({
 
     const canAttachSelectedFiles =
         !(selectedAttachmentBuckets.imageFiles.length > 0 && !supportsImageInput) &&
-        !(selectedAttachmentBuckets.binaryFiles.length > 0 && !supportsTools);
+        !(selectedAttachmentBuckets.binaryFiles.length > 0 && !supports工具s);
 
     const handleGenerate = async () => {
         const cleanPrompt = prompt.trim();
         const folderIntent = detectFolderIntent(cleanPrompt);
-        const nextFileContextSource =
+        const nextFile上下文Source =
             selectedFileIds.length > 0
                 ? "workspace"
                 : currentExternalFolderSession
@@ -733,16 +733,16 @@ function ChatInput({
         const previousSelectedFileIds = selectedFileIds;
 
         if (folderIntent.requiresFolderAccess) {
-            if (!supportsTools) {
+            if (!supports工具s) {
                 setFolderNotice(
-                    "Folder actions need an API-key-backed model. Switch models in Settings first.",
+                    "文件夹操作需要 API 密钥支持的模型。 请切换模型于 设置 。",
                 );
                 return;
             }
 
             if (Platform.OS !== "android") {
                 setFolderNotice(
-                    "Picked-folder agent access is Android-only right now. Use @ file actions to work in the app workspace on this platform.",
+                    "文件夹代理访问当前仅支持 Android。 请使用 @ 文件操作在当前平台的应用工作区中操作。",
                 );
                 return;
             }
@@ -764,14 +764,14 @@ function ChatInput({
 
         logComposerDebug("handle-generate-send", {
             cleanPromptLength: cleanPrompt.length,
-            fileContextSource: nextFileContextSource,
+            file上下文Source: nextFile上下文Source,
             selectedFileIds: previousSelectedFileIds,
         });
 
         try {
             await onSend({
                 content: cleanPrompt,
-                fileContextSource: nextFileContextSource,
+                file上下文Source: nextFile上下文Source,
                 selectedFileIds: previousSelectedFileIds,
             });
             requestAnimationFrame(() => {
@@ -781,7 +781,7 @@ function ChatInput({
         } catch (sendError) {
             logComposerDebug("handle-generate-send-error", {
                 message:
-                    sendError instanceof Error ? sendError.message : String(sendError),
+                    sendError instanceof 错误 ? sendError.message : String(sendError),
             });
             setPrompt(previousPrompt);
             await setSelectedFileIds(previousSelectedFileIds);
@@ -800,13 +800,13 @@ function ChatInput({
 
             setFolderDrawerOpen(false);
             setPendingFolderSend(null);
-            setFolderNotice(`Using ${session.displayName} for this chat.`);
+            setFolderNotice(`Using ${session.displayName} for 此对话.`);
             setPrompt("");
             await setSelectedFileIds([]);
             scrollToEnd();
             await onSend({
                 content: pendingFolderSend.content,
-                fileContextSource: "external-folder",
+                file上下文Source: "external-folder",
                 selectedFileIds: pendingFolderSend.selectedFileIds,
             });
             requestAnimationFrame(() => {
@@ -863,8 +863,8 @@ function ChatInput({
 
         if (!supportsImageInput) {
             Alert.alert(
-                "Image input unavailable",
-                "The selected model does not support image attachments.",
+                "图片输入不可用",
+                "所选模型不支持图片附件。",
             );
             return;
         }
@@ -900,7 +900,7 @@ function ChatInput({
         } catch (error) {
             Alert.alert(
                 "Could not paste image",
-                error instanceof Error ? error.message : "Please try again.",
+                error instanceof 错误 ? error.message : "Please try again.",
             );
         } finally {
             setBusyAction(null);
@@ -945,12 +945,12 @@ function ChatInput({
         }
 
         Alert.alert(
-            "Clear workspace files?",
+            "清除 workspace files?",
             "This permanently deletes all uploaded, created, and generated workspace files.",
             [
-                { text: "Cancel", style: "cancel" },
+                { text: "取消", style: "cancel" },
                 {
-                    text: "Clear all",
+                    text: "清除 all",
                     style: "destructive",
                     onPress: () => {
                         setBusyAction("clear");
@@ -975,12 +975,12 @@ function ChatInput({
         }
 
         Alert.alert(
-            "Delete uploaded file?",
+            "删除 uploaded file?",
             `${file.displayName} will be permanently deleted.`,
             [
-                { text: "Cancel", style: "cancel" },
+                { text: "取消", style: "cancel" },
                 {
-                    text: "Delete",
+                    text: "删除",
                     style: "destructive",
                     onPress: () => {
                         setDeletingFileId(file.id);
@@ -1029,15 +1029,15 @@ function ChatInput({
                     onPress: () => {
                         clearTriggerText();
 
-                        if (!supportsTools) {
+                        if (!supports工具s) {
                             onOpenSettings();
                             return;
                         }
 
                         setNewFileDrawerOpen(true);
                     },
-                    subtitle: supportsTools
-                        ? "Create a workspace file"
+                    subtitle: supports工具s
+                        ? "创建 a workspace file"
                         : "Choose a tool-capable model first",
                     visible: true,
                 },
@@ -1048,7 +1048,7 @@ function ChatInput({
                     onPress: () => {
                         clearTriggerText();
 
-                        if (!supportsTools) {
+                        if (!supports工具s) {
                             onOpenSettings();
                             return;
                         }
@@ -1063,14 +1063,14 @@ function ChatInput({
                         setBusyAction("folder");
                         pickConversationFolder()
                             .then((session) => {
-                                setFolderNotice(`Using ${session.displayName} for this chat.`);
+                                setFolderNotice(`Using ${session.displayName} for 此对话.`);
                             })
                             .catch(console.error)
                             .finally(() => {
                                 setBusyAction(null);
                             });
                     },
-                    subtitle: activeFolderLabel ?? "Use an external folder for this chat",
+                    subtitle: activeFolderLabel ?? "Use an external folder for 此对话",
                     visible: Platform.OS === "android",
                 },
                 {
@@ -1085,7 +1085,7 @@ function ChatInput({
                             })
                             .catch(console.error);
                     },
-                    subtitle: "Stop using the external folder",
+                    subtitle: "停止 using the external folder",
                     visible: currentExternalFolderSession !== null,
                 },
             ]
@@ -1098,7 +1098,7 @@ function ChatInput({
             onOpenSettings,
             pickConversationFolder,
             supportsImageInput,
-            supportsTools,
+            supports工具s,
             theme.text,
         ],
     );
@@ -1120,12 +1120,12 @@ function ChatInput({
             {
                 id: "select-model",
                 icon: <Check color={theme.text} size={16} />,
-                label: "Select model",
+                label: "选择模型",
                 onPress: () => {
                     clearTriggerText();
-                    setModelsDrawerOpen(true);
+                    set模型sDrawerOpen(true);
                 },
-                subtitle: currentModelLabel ?? "Choose the current chat model",
+                subtitle: current模型Label ?? "Choose the current chat model",
             },
             {
                 id: "new-chat",
@@ -1135,17 +1135,17 @@ function ChatInput({
                     clearTriggerText();
                     onCreateConversation().catch(console.error);
                 },
-                subtitle: "Start a fresh conversation",
+                subtitle: "开始 a fresh conversation",
             },
             {
                 id: "open-settings",
                 icon: <Settings color={theme.text} size={16} />,
-                label: "Open settings",
+                label: "打开设置",
                 onPress: () => {
                     clearTriggerText();
                     onOpenSettings();
                 },
-                subtitle: "Providers, models, and storage",
+                subtitle: "提供商s, models, and storage",
             },
             ...(Platform.OS === "android"
                 ? [
@@ -1156,7 +1156,7 @@ function ChatInput({
                         onPress: () => {
                             clearTriggerText();
 
-                            if (!supportsTools) {
+                            if (!supports工具s) {
                                 onOpenSettings();
                                 return;
                             }
@@ -1165,7 +1165,7 @@ function ChatInput({
                             pickConversationFolder()
                                 .then((session) => {
                                     setFolderNotice(
-                                        `Using ${session.displayName} for this chat.`,
+                                        `Using ${session.displayName} for 此对话.`,
                                     );
                                 })
                                 .catch(console.error)
@@ -1174,19 +1174,19 @@ function ChatInput({
                                 });
                         },
                         subtitle:
-                            activeFolderLabel ?? "Use an external folder for this chat",
+                            activeFolderLabel ?? "Use an external folder for 此对话",
                     },
                 ]
                 : []),
         ],
         [
             activeFolderLabel,
-            currentModelLabel,
+            current模型Label,
             onCreateConversation,
             onOpenSettings,
             pickConversationFolder,
             selectedSkills.length,
-            supportsTools,
+            supports工具s,
             theme.text,
         ],
     );
@@ -1296,7 +1296,7 @@ function ChatInput({
                         ) : (
                             <View className="px-sp-4 py-sp-3">
                                 <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
-                                    No matches
+                                    否 matches
                                 </Text>
                             </View>
                         )}
@@ -1319,7 +1319,7 @@ function ChatInput({
                             onFocus={() => {
                                 scrollToEnd();
                             }}
-                            placeholder="Type a message..."
+                            placeholder="输入消息..."
                             scrollEnabled={showExpandComposer}
                             style={{ height: compactComposerHeight }}
                             value={prompt}
@@ -1366,7 +1366,7 @@ function ChatInput({
                         <Text className="font-sans text-xs font-medium text-foreground dark:text-foreground-dark">
                             {selectedSkills.length > 0
                                 ? `${selectedSkills.length}`
-                                : "Skills"}
+                                : "技能"}
                         </Text>
                     </Pressable>
 
@@ -1421,7 +1421,7 @@ function ChatInput({
                             autoFocus
                             className="min-h-0 flex-1"
                             onChangeText={setPrompt}
-                            placeholder="Type a message..."
+                            placeholder="输入消息..."
                             style={{ flex: 1, minHeight: 0, width: "100%" }}
                             value={prompt}
                         />
@@ -1435,7 +1435,7 @@ function ChatInput({
                                 }}
                                 variant="secondary"
                             >
-                                Done
+                                完成
                             </Button>
                             <Button
                                 className="flex-1"
@@ -1450,7 +1450,7 @@ function ChatInput({
                                     handleGenerate().catch(console.error);
                                 }}
                             >
-                                {loading ? "Stop" : "Send"}
+                                {loading ? "停止" : "发送"}
                             </Button>
                         </View>
                     </DrawerFooter>
@@ -1505,7 +1505,7 @@ function ChatInput({
                             })
                         ) : (
                             <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
-                                No uploaded files yet. Upload one below to attach it.
+                                否 uploaded files yet. Upload one below to attach it.
                             </Text>
                         )}
                     </DrawerBody>
@@ -1527,7 +1527,7 @@ function ChatInput({
                                 textClassName="text-destructive dark:text-destructive-dark"
                                 variant="ghost"
                             >
-                                Clear all workspace files
+                                清除 all workspace files
                             </Button>
                         </View>
                     </DrawerFooter>
@@ -1548,7 +1548,7 @@ function ChatInput({
                     <DrawerHeader>
                         <DrawerTitle>Grant folder access</DrawerTitle>
                         <DrawerDescription>
-                            Choose one folder for this chat only.
+                            Choose one folder for 此对话 only.
                         </DrawerDescription>
                     </DrawerHeader>
 
@@ -1566,7 +1566,7 @@ function ChatInput({
                             }}
                             variant="outline"
                         >
-                            Cancel
+                            取消
                         </Button>
                     </DrawerFooter>
                 </DrawerContent>
@@ -1577,7 +1577,7 @@ function ChatInput({
                     <DrawerHeader>
                         <DrawerTitle>New file</DrawerTitle>
                         <DrawerDescription>
-                            Create a workspace file and attach it to this turn.
+                            创建 a workspace file and attach it to this turn.
                         </DrawerDescription>
                     </DrawerHeader>
 
@@ -1602,47 +1602,47 @@ function ChatInput({
                             onPress={handleCreateFile}
                             variant="secondary"
                         >
-                            Create file
+                            创建 file
                         </Button>
                     </DrawerFooter>
                 </DrawerContent>
             </Drawer>
 
-            <Drawer onOpenChange={setModelsDrawerOpen} open={modelsDrawerOpen}>
+            <Drawer onOpenChange={set模型sDrawerOpen} open={modelsDrawerOpen}>
                 <DrawerContent showCloseButton showHandle>
                     <DrawerHeader>
-                        <DrawerTitle>Select model</DrawerTitle>
+                        <DrawerTitle>选择模型</DrawerTitle>
                         <DrawerDescription>
-                            Switch the current model for this chat.
+                            Switch the current model for 此对话.
                         </DrawerDescription>
                     </DrawerHeader>
                     <DrawerBody contentContainerClassName="gap-sp-2 pb-sp-4">
-                        {activeModels.length > 0 ? (
-                            activeModels.map((model) => (
+                        {active模型s.length > 0 ? (
+                            active模型s.map((model) => (
                                 <DrawerSelectRow
                                     key={model.ref}
                                     onPress={() => {
-                                        selectModel(model.ref)
+                                        select模型(model.ref)
                                             .then(() => {
-                                                setModelsDrawerOpen(false);
+                                                set模型sDrawerOpen(false);
                                             })
                                             .catch(console.error);
                                     }}
-                                    selected={currentModelRef === model.ref}
+                                    selected={current模型Ref === model.ref}
                                     subtitle={model.providerLabel}
                                     title={model.label}
                                 />
                             ))
                         ) : (
                             <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
-                                No active models
+                                没有活跃模型
                             </Text>
                         )}
                     </DrawerBody>
                     <DrawerFooter>
                         <Button
                             onPress={() => {
-                                setModelsDrawerOpen(false);
+                                set模型sDrawerOpen(false);
                                 onOpenSettings();
                             }}
                             variant="outline"
@@ -1656,9 +1656,9 @@ function ChatInput({
             <Drawer onOpenChange={setSkillsDrawerOpen} open={skillsDrawerOpen}>
                 <DrawerContent showCloseButton showHandle>
                     <DrawerHeader>
-                        <DrawerTitle>Skills</DrawerTitle>
+                        <DrawerTitle>技能</DrawerTitle>
                         <DrawerDescription>
-                            {selectedSkills.length} selected for this chat.
+                            {selectedSkills.length} selected for 此对话.
                         </DrawerDescription>
                     </DrawerHeader>
                     <DrawerBody contentContainerClassName="gap-sp-2 pb-sp-4">
@@ -1690,7 +1690,7 @@ function ChatInput({
                             })
                         ) : (
                             <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
-                                No enabled skills
+                                否 enabled skills
                             </Text>
                         )}
                     </DrawerBody>
@@ -1714,7 +1714,7 @@ function ChatInput({
             >
                 <DrawerContent showCloseButton showHandle>
                     <DrawerHeader>
-                        <DrawerTitle>Tool approval</DrawerTitle>
+                        <DrawerTitle>工具审批</DrawerTitle>
                         <DrawerDescription>
                             Choose how built-in tools run during chat.
                         </DrawerDescription>
@@ -1722,7 +1722,7 @@ function ChatInput({
                     <DrawerBody contentContainerClassName="gap-sp-2 pb-sp-4">
                         <DrawerSelectRow
                             onPress={() => {
-                                updateToolApprovalMode("ask")
+                                update工具ApprovalMode("ask")
                                     .then(() => {
                                         setApprovalModeDrawerOpen(false);
                                     })
@@ -1734,7 +1734,7 @@ function ChatInput({
                         />
                         <DrawerSelectRow
                             onPress={() => {
-                                updateToolApprovalMode("auto")
+                                update工具ApprovalMode("auto")
                                     .then(() => {
                                         setApprovalModeDrawerOpen(false);
                                     })
