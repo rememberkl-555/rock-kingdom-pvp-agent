@@ -219,7 +219,7 @@ export default function SettingsProvidersScreen() {
                     variant="ghost"
                 />
                 <Text className="font-sans text-xl font-semibold text-foreground dark:text-foreground-dark">
-                    Providers
+                    提供商
                 </Text>
             </View>
 
@@ -269,7 +269,7 @@ export default function SettingsProvidersScreen() {
                                         value={
                                             selectedProvider?.family === "ollama"
                                                 ? selectedProviderDiscovery?.status === "connected"
-                                                    ? "Connected"
+                                                    ? "已连接"
                                                     : selectedProviderDiscovery?.status === "failed"
                                                         ? "Connection failed"
                                                         : selectedProviderActive
@@ -414,7 +414,7 @@ export default function SettingsProvidersScreen() {
                                             size="sm"
                                             variant="ghost"
                                         >
-                                            Clear saved API key
+                                            清除 saved API key
                                         </Button>
                                     </View>
                                 ) : (
@@ -434,7 +434,7 @@ export default function SettingsProvidersScreen() {
                                             onChangeText={setBaseUrlInput}
                                             placeholder={
                                                 selectedProviderNeedsBaseUrl
-                                                    ? "Base URL"
+                                                    ? "接口地址"
                                                     : "Endpoint override (optional)"
                                             }
                                             value={baseUrlInput}
@@ -468,7 +468,7 @@ export default function SettingsProvidersScreen() {
                                                 }}
                                                 variant="secondary"
                                             >
-                                                Save
+                                                保存
                                             </Button>
                                             <Button
                                                 className="flex-1"
@@ -484,7 +484,7 @@ export default function SettingsProvidersScreen() {
                                                 }}
                                                 variant="outline"
                                             >
-                                                Clear
+                                                清除
                                             </Button>
                                         </View>
                                     </View>
@@ -494,7 +494,7 @@ export default function SettingsProvidersScreen() {
                                     <View className="flex-row items-center justify-between gap-sp-3">
                                         <Text className="flex-1 font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
                                             {selectedProvider.authType === "oauth"
-                                                ? "Models supported by ChatGPT OAuth"
+                                                ? "ChatGPT OAuth 支持的模型"
                                                 : "Models from live provider catalogs"}
                                         </Text>
                                         {selectedProvider.authType === "apiKey" ||
@@ -523,7 +523,7 @@ export default function SettingsProvidersScreen() {
                                         autoCapitalize="none"
                                         autoCorrect={false}
                                         onChangeText={setModelQuery}
-                                        placeholder="Search models"
+                                        placeholder="搜索 models"
                                         value={modelQuery}
                                     />
 
@@ -561,7 +561,7 @@ export default function SettingsProvidersScreen() {
                                             size="sm"
                                             variant="outline"
                                         >
-                                            Add
+                                            添加
                                         </Button>
                                     </View>
 
@@ -650,8 +650,8 @@ export default function SettingsProvidersScreen() {
                                                                                         ? "Use"
                                                                                         : "Added"
                                                                                     : selectedProviderActive
-                                                                                        ? "Add"
-                                                                                        : "Save"
+                                                                                        ? "添加"
+                                                                                        : "保存"
                                                                         }
                                                                     />
                                                                 </View>
@@ -665,10 +665,10 @@ export default function SettingsProvidersScreen() {
                                         <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
                                             {selectedProvider.family === "ollama" &&
                                                 selectedProviderDiscovery?.status === "connected"
-                                                ? "Connected, but no pulled models were found. Pull a model in Ollama, then tap Refresh."
+                                                ? "已连接，但未找到拉取的模型。 请在 Ollama 中拉取模型，然后点击 Refresh."
                                                 : selectedProvider.family === "ollama"
                                                     ? "Connect to Ollama to load pulled models."
-                                                    : "No models found"}
+                                                    : "否 models found"}
                                         </Text>
                                     )}
                                 </View>
@@ -743,14 +743,14 @@ function buildCapabilityBadges(
     const capabilities = model.capabilities ?? {};
 
     if (("supportsTools" in model && model.supportsTools) || capabilities.tools) {
-        badges.push("Tools");
+        badges.push("工具");
     }
 
     if (
         ("supportsImageInput" in model && model.supportsImageInput) ||
         capabilities.imageInput
     ) {
-        badges.push("Image input");
+        badges.push("图片输入");
     }
 
     if (
