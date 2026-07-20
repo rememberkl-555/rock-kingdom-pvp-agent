@@ -1,93 +1,47 @@
 name: Build Android APK
-
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-
+on: [push, workflow_dispatch]
 permissions:
   contents: write
-
-concurrency:
-  group: android-release-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
         with:
           version: 10.29.2
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
-
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
+          cache: pnpm
+      - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Prebuild Android project
-        run: npx expo prebuild --platform android --clean --no-install
-
-      - name: Build Android APK
-        run: |
+          distribution: temurin
+          java-version: 17
+      - run: pnpm install --frozen-lockfile
+      - run: npx expo prebuild --platform android --clean --no-install
+      - run: |
           cd android
           chmod +x gradlew
-          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
           ./gradlew assembleDebug --no-daemon -Dorg.gradle.jvmargs=-Xmx4g
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: mobile-agent-pvp-apk
           path: android/app/build/outputs/apk/debug/*.apk
           compression-level: 0
           retention-days: 30
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.5.2
           name: "Rock Kingdom PVP AI Agent v1.5.2"
           files: android/app/build/outputs/apk/debug/*.apk
           body: |
             # 洛克王国 PVP AI 代打系统 v1.5.2
-
-            ## 架构
-            - **手机端**: Mobile-Agent APK（改造版）
-            - **云端服务器**: 广州腾讯云 193.112.187.72:8047
-
-            ## 新增功能
             - PVP AI 代打系统完整模块
-            - 战局状态解析（sensenova-6.7-flash-lite 多模态）
-            - 策略决策引擎（deepseek-v4-flash 深度推理）
+            - 战局状态解析（sensenova-6.7-flash-lite）
+            - 策略决策引擎（deepseek-v4-flash）
             - HUD 弹幕实时展示思考过程
-            - 战斗循环控制器（截图→分析→决策→点击→循环）
-            - SenseNova Provider 预设
-
-            ## 使用方式
-            1. 安装 APK 到手机
-            2. 在 Settings → Providers 中添加 SenseNova
-               - Base URL: https://token.sensenova.cn/v1
-               - API Key: 在 SenseNova 控制台申请
-            3. 打开 PVP 页面，点击「开始代打」
-
-            ## 注意
-            服务器端 API 已部署在 `http://193.112.187.72:8047`
+            - 战斗循环控制器
+            - 云端服务器：193.112.187.72:8047
           prerelease: true
