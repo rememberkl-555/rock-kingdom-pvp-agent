@@ -10,7 +10,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       
@@ -27,49 +27,46 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      
+        
       - name: Cache Gradle
         uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('android/*.gradle*') }}
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
             gradle-${{ runner.os }}-
       
       - run: pnpm install --frozen-lockfile
         timeout-minutes: 10
       
-      - run: npx expo prebuild --platform android --clean --no-install
-        timeout-minutes: 10
-      
-      - name: Build APK
+      - name: Export and build APK
         run: |
-          cd android
-          chmod +x gradlew
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-          echo "org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m" >> gradle.properties
-          ./gradlew assembleDebug --no-daemon --no-build-cache
-        timeout-minutes: 30
+          npx expo export --platform android 2>&1 || true
+          npx expo run:android --no-build-cache 2>&1
+        timeout-minutes: 45
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2048m"
       
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Find and Upload APK
+        run: |
+          find . -name '*.apk' -type f | head -10
+          mkdir -p apk-output
+          find . -name '*.apk' -type f -exec cp {} apk-output/ \;
+      
+      - uses: actions/upload-artifact@v4
         with:
           name: mobile-agent-pvp-apk
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: apk-output/*.apk
           compression-level: 0
           retention-days: 30
       
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.5.3
           name: "Rock Kingdom PVP AI Agent v1.5.3"
-          files: android/app/build/outputs/apk/debug/*.apk
+          files: apk-output/*.apk
           body: |
             # 洛克王国 PVP AI 代打系统 v1.5.3
             - PVP AI 代打系统完整模块
@@ -78,5 +75,4 @@ jobs:
             - HUD 弹幕实时展示思考过程
             - 战斗循环控制器
             - 云端服务器：193.112.187.72:8047
-            - 优化：Gradle 缓存加速构建
           prerelease: true
