@@ -20,7 +20,7 @@ import { Separator } from "@/components/ui/separator";
 import { useAppState } from "@/hooks/use-app-state";
 import { useConfig } from "@/hooks/use-config";
 import { useLiveModelCatalog } from "@/hooks/use-live-model-catalog";
-import { useTheme } from "@/hooks/use-theme";
+import { use主题 } from "@/hooks/use-theme";
 import { countEnabledBuiltInFileTools } from "@/lib/config/built-in-tools";
 import { cn } from "@/lib/utils";
 import { useUpdate } from "@/providers/check-for-updates";
@@ -30,7 +30,7 @@ type DrawerKey = "current-model" | "db" | "theme" | null;
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const theme = useTheme();
+  const theme = use主题();
   const { error, hydrating, ready } = useAppState();
   const {
     activeModels,
@@ -46,7 +46,7 @@ export default function SettingsScreen() {
     themeMode,
     toolSettings,
     updateDatabaseSettings,
-    updateThemeMode,
+    update主题Mode,
     providers,
   } = useConfig();
   const { data: liveModels } = useLiveModelCatalog();
@@ -92,13 +92,13 @@ export default function SettingsScreen() {
           variant="ghost"
         />
         <Text className="font-sans text-xl font-semibold text-foreground dark:text-foreground-dark">
-          Settings
+          设置
         </Text>
       </View>
 
       <Card className="overflow-hidden">
         <SettingsLinkRow
-          label="Providers"
+          label="提供商"
           onPress={() => {
             router.push("/settings/providers");
           }}
@@ -122,7 +122,7 @@ export default function SettingsScreen() {
         />
         <Separator />
         <SettingsLinkRow
-          label="Skills"
+          label="技能"
           onPress={() => {
             router.push("/settings/skills" as never);
           }}
@@ -130,11 +130,11 @@ export default function SettingsScreen() {
         />
         <Separator />
         <SettingsLinkRow
-          label="Memory"
+          label="记忆"
           onPress={() => {
             router.push("/settings/memory" as never);
           }}
-          value={memoryEnabled ? `${enabledMemoryCount} saved` : "Off"}
+          value={memoryEnabled ? `${enabledMemoryCount} saved` : "关"}
         />
         <Separator />
         <Drawer
@@ -174,7 +174,7 @@ export default function SettingsScreen() {
                   );
                 })
               ) : (
-                <EmptyStateText>No active models</EmptyStateText>
+                <EmptyStateText>没有活跃模型</EmptyStateText>
               )}
             </DrawerBody>
             <DrawerFooter>
@@ -199,7 +199,7 @@ export default function SettingsScreen() {
         >
           <DrawerTrigger asChild>
             <SettingsLinkRow
-              label="Theme"
+              label="主题"
               value={
                 themeMode === "system"
                   ? "System"
@@ -211,7 +211,7 @@ export default function SettingsScreen() {
           </DrawerTrigger>
           <DrawerContent showCloseButton>
             <DrawerHeader>
-              <DrawerTitle>Theme</DrawerTitle>
+              <DrawerTitle>主题</DrawerTitle>
             </DrawerHeader>
             <DrawerBody contentContainerClassName="gap-sp-2">
               {(
@@ -226,7 +226,7 @@ export default function SettingsScreen() {
                   label={label}
                   onPress={() => {
                     runAction(`theme:${value}`, async () => {
-                      await updateThemeMode(value);
+                      await update主题Mode(value);
                       setOpenDrawer(null);
                     }).catch(console.error);
                   }}
@@ -311,7 +311,7 @@ export default function SettingsScreen() {
                   }}
                   variant="secondary"
                 >
-                  Save
+                  保存
                 </Button>
                 <Button
                   className="flex-1"
@@ -324,7 +324,7 @@ export default function SettingsScreen() {
                   }}
                   variant="outline"
                 >
-                  Clear
+                  清除
                 </Button>
               </View>
             </DrawerFooter>
@@ -340,7 +340,7 @@ export default function SettingsScreen() {
 
       <Card className="overflow-hidden">
         <SettingsLinkRow
-          label="App Update"
+          label="App 更新"
           value={release ? `Update ${release.tagName}` : "Up to date"}
           showChevron={!!release}
           disabled={installing}
@@ -374,7 +374,7 @@ function SettingsLinkRow({
   showChevron?: boolean;
   value?: ReactNode;
 }) {
-  const theme = useTheme();
+  const theme = use主题();
 
   return (
     <Pressable
@@ -415,7 +415,7 @@ function DrawerOptionRow({
   selected?: boolean;
   subtitle?: string;
 }) {
-  const theme = useTheme();
+  const theme = use主题();
 
   return (
     <Pressable
