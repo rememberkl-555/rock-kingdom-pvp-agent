@@ -55,8 +55,8 @@ jobs:
           retention-days: 30
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.5.4
-          name: "洛克王国 PVP AI 代打系统 v1.5.4（汉化版）"
+          tag_name: v1.5.5
+          name: "洛克王国 PVP AI 代打系统 v1.5.5（汉化版）"
           files: android/app/build/outputs/apk/debug/*.apk
           body: |
             # Rock Kingdom PVP AI Agent v1.5.3
