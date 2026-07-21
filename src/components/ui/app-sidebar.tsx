@@ -42,7 +42,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>聊天</SidebarGroupLabel>
           <SidebarMenu>
-            {conversations.map((conversation) => (
+            {conversations?.map((conversation) => (
               <SidebarMenuItem key={conversation.id}>
                 <SidebarClose asChild>
                   <SidebarMenuButton
