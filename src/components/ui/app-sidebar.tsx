@@ -105,7 +105,7 @@ export function AppSidebar() {
                 </SidebarClose>
               </SidebarMenuItem>
             ))}
-            {conversations.length === 0 ? (
+            {(!conversations || conversations.length === 0) ? (
               <SidebarMenuItem>
                 <Text className="px-sp-2 font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
                   等待数据加载完成后，你的对话将显示在这里。
