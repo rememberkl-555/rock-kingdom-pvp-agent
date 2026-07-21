@@ -268,7 +268,7 @@ export default function Screen() {
                                 ? `${current模型.providerLabel} · ${current模型.label}`
                                 : null
                         }
-                        active模型s={active模型s.map((model) => ({
+                        active模型s={(active模型s || []).map((model) => ({
                             label: model.label,
                             providerLabel: model.providerLabel,
                             ref: model.ref,
@@ -1617,7 +1617,7 @@ function ChatInput({
                         </DrawerDescription>
                     </DrawerHeader>
                     <DrawerBody contentContainerClassName="gap-sp-2 pb-sp-4">
-                        {active模型s.length > 0 ? (
+                        {active模型s && active模型s.length > 0 ? (
                             active模型s.map((model) => (
                                 <DrawerSelectRow
                                     key={model.ref}
