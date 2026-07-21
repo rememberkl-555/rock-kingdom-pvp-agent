@@ -16,6 +16,7 @@ import {
 } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SQLiteProvider } from "expo-sqlite";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
 import { useEffect, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -201,25 +202,27 @@ function SplashScreenController() {
 export default function MainLayout() {
   const colorScheme = useColorScheme();
   return (
-    <KeyboardProvider>
-      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <AppQueryProvider>
-          <SQLiteProvider
-            databaseName="mobile-agent.db"
-            onInit={migrateAppDatabase}
-          >
-            <AppStateProvider>
-              <UpdateProvider>
-                <SplashScreenController />
-                <NotificationObserver />
-                <InAppNotificationBanner />
-                <ReleaseUpdateBanner />
-                <Slot />
-              </UpdateProvider>
-            </AppStateProvider>
-          </SQLiteProvider>
-        </AppQueryProvider>
-      </ThemeProvider>
-    </KeyboardProvider>
+    <SafeAreaProvider>
+      <KeyboardProvider>
+        <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+          <AppQueryProvider>
+            <SQLiteProvider
+              databaseName="mobile-agent.db"
+              onInit={migrateAppDatabase}
+            >
+              <AppStateProvider>
+                <UpdateProvider>
+                  <SplashScreenController />
+                  <NotificationObserver />
+                  <InAppNotificationBanner />
+                  <ReleaseUpdateBanner />
+                  <Slot />
+                </UpdateProvider>
+              </AppStateProvider>
+            </SQLiteProvider>
+          </AppQueryProvider>
+        </ThemeProvider>
+      </KeyboardProvider>
+    </SafeAreaProvider>
   );
 }
